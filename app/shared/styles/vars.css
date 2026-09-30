@@ -1,0 +1,88 @@
+@layer tokens {
+  :root {
+    --brand-50: oklch(0.985 0.007 165);
+    --brand-100: oklch(0.96 0.019 165);
+    --brand-200: oklch(0.92 0.039 165);
+    --brand-300: oklch(0.86 0.070 165);
+    --brand-400: oklch(0.74 0.136 165);
+    --brand-500: oklch(0.62 0.147 165);
+    --brand-600: oklch(0.52 0.123 165);
+    --brand-700: oklch(0.42 0.100 165);
+    --brand-800: oklch(0.32 0.076 165);
+    --brand-900: oklch(0.22 0.052 165);
+    --brand-950: oklch(0.14 0.033 165);
+    --accent: var(--brand-600);
+    --accent-deep: var(--brand-700);
+    --accent-soft: var(--brand-50);
+    --accent-ink: #ffffff;
+    --accent-edge: var(--brand-200);
+    --link-c: 0.123;
+    --link-h: 165;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --accent: var(--brand-400);
+      --accent-deep: var(--brand-300);
+      --accent-soft: var(--brand-900);
+      --accent-ink: var(--brand-950);
+      --accent-edge: var(--brand-700);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --accent: var(--brand-400);
+    --accent-deep: var(--brand-300);
+    --accent-soft: var(--brand-900);
+    --accent-ink: var(--brand-950);
+    --accent-edge: var(--brand-700);
+  }
+}
+
+/* Chart series colors, validated for color-vision deficiency in this order.
+   A category keeps its slot, so its color never changes with its rank. */
+@layer tokens {
+  :root {
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --series-3: #1baf7a;
+    --series-4: #eda100;
+    --series-5: #e87ba4;
+    --series-6: #008300;
+    --series-7: #4a3aa7;
+    --series-8: #e34948;
+    --series-other: #a3a29c;
+    --chart-grid: #e1e0d9;
+    --chart-axis: #c3c2b7;
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --series-3: #199e70;
+      --series-4: #c98500;
+      --series-5: #d55181;
+      --series-6: #008300;
+      --series-7: #9085e9;
+      --series-8: #e66767;
+      --series-other: #6b6a65;
+      --chart-grid: #2c2c2a;
+      --chart-axis: #383835;
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --series-1: #3987e5;
+    --series-2: #d95926;
+    --series-3: #199e70;
+    --series-4: #c98500;
+    --series-5: #d55181;
+    --series-6: #008300;
+    --series-7: #9085e9;
+    --series-8: #e66767;
+    --series-other: #6b6a65;
+    --chart-grid: #2c2c2a;
+    --chart-axis: #383835;
+  }
+}
