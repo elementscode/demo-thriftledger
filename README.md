@@ -1,12 +1,12 @@
-![Thriftledger, a personal budgeting app built with Elements: the September budget with spent and remaining bars for each category, two categories over budget, and six transactions waiting for a category.](POSTER_URL)
+![Thriftledger, a personal budgeting app built with Elements: the September budget with spent and remaining bars for each category, two categories over budget, and six transactions waiting for a category.](https://elements.dev/demos/01a0f44b-9270-7c8f-81dc-920795810634/poster?v=ecad76d61285)
 
 # Thriftledger
 
 > A demo app built with [Elements](https://elements.dev).
 
-Bank accounts, CSV import that skips duplicates, rules that categorize transactions, monthly budgets with spent and remaining, and spending and net worth reports.
+Bank accounts, CSV import that skips duplicates, rules that categorize, monthly budgets and spending reports.
 
-**Demo:** [Thriftledger](TBD)
+**Demo:** [Thriftledger](https://elements.dev/demos/01a0f44b-9270-7c8f-81dc-920795810634)
 
 ## Agent specs
 
