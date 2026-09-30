@@ -1,0 +1,293 @@
+import "./style.css";
+import { LiveView } from "@elements/app";
+import { Layout } from "#app/shared/templates/layout";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+import {
+  Account,
+  Budget,
+  Category,
+  Transaction,
+  UNCATEGORIZED,
+  byCategoryId,
+  centsToInput,
+  currentMonth,
+  formatMoney,
+  formatWholeMoney,
+  isCategorized,
+  monthLabel,
+  monthOf,
+  parseMoneyInput,
+  shiftMonth,
+  spendingByCategory,
+} from "#app/shared/lib/ledger";
+import { seriesColor } from "#app/shared/lib/colors";
+
+interface View {
+  month: string;
+}
+
+interface Edit {
+  categoryId: string;
+  text: string;
+}
+
+interface BudgetLine {
+  id: string;
+  category: Category | undefined;
+  name: string;
+  budget: Budget | undefined;
+  spentCents: number;
+}
+
+export function lines(
+  categories: LiveView<Category>,
+  budgets: LiveView<Budget>,
+  transactions: LiveView<Transaction>,
+  month: string,
+): BudgetLine[] {
+  let byId = byCategoryId(categories);
+  let spent = spendingByCategory(transactions, byId, month);
+  let result: BudgetLine[] = [];
+
+  for (let category of categories.filter((c) => c.kind === "expense")) {
+    result.push({
+      id: category.id,
+      category,
+      name: category.name,
+      budget: budgets.find((b) => b.categoryId === category.id),
+      spentCents: spent.get(category.id) ?? 0,
+    });
+  }
+
+  let loose = spent.get(UNCATEGORIZED) ?? 0;
+
+  if (loose > 0) {
+    result.push({ id: UNCATEGORIZED, category: undefined, name: "Uncategorized", budget: undefined, spentCents: loose });
+  }
+
+  // Budgeted first, the biggest first; then what has no budget, by spend.
+  return result.sort((a, b) => {
+    if (!!a.budget !== !!b.budget) {
+      return a.budget ? -1 : 1;
+    }
+
+    return (b.budget?.amountCents ?? b.spentCents) - (a.budget?.amountCents ?? a.spentCents) || a.name.localeCompare(b.name);
+  });
+}
+
+export function totals(all: BudgetLine[]) {
+  let budgeted = 0;
+  let spentInBudget = 0;
+  let spent = 0;
+
+  for (let line of all) {
+    spent += line.spentCents;
+
+    if (line.budget) {
+      budgeted += line.budget.amountCents;
+      spentInBudget += line.spentCents;
+    }
+  }
+
+  return { budgeted, spent, remaining: budgeted - spentInBudget, unbudgeted: spent - spentInBudget };
+}
+
+function uncategorizedCount(transactions: LiveView<Transaction>, month: string): number {
+  return transactions.filter((t) => monthOf(t.postedOn) === month && !isCategorized(t)).length;
+}
+
+function share(line: BudgetLine): number {
+  if (!line.budget || line.budget.amountCents === 0) {
+    return line.spentCents > 0 ? 100 : 0;
+  }
+
+  return Math.min(100, Math.max(0, (line.spentCents / line.budget.amountCents) * 100));
+}
+
+function level(line: BudgetLine): string {
+  if (!line.budget) {
+    return "";
+  }
+
+  let ratio = line.budget.amountCents === 0 ? (line.spentCents > 0 ? 2 : 0) : line.spentCents / line.budget.amountCents;
+
+  return ratio > 1 ? "is-over" : ratio >= 0.9 ? "is-near" : "";
+}
+
+function daysLeft(month: string): number {
+  if (month !== currentMonth()) {
+    return 0;
+  }
+
+  let now = new Date();
+  let last = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
+
+  return last - now.getDate() + 1;
+}
+
+function onMonth(view: View, by: number) {
+  view.month = shiftMonth(view.month, by);
+  history.replaceState(null, "", view.month === currentMonth() ? "/" : `/?month=${view.month}`);
+}
+
+function onEdit(edit: Edit, line: BudgetLine) {
+  edit.categoryId = line.id;
+  edit.text = line.budget ? centsToInput(line.budget.amountCents) : "";
+}
+
+function onCommit(budgets: LiveView<Budget>, edit: Edit, line: BudgetLine) {
+  if (edit.categoryId !== line.id) {
+    return;
+  }
+
+  edit.categoryId = "";
+
+  let text = edit.text.trim();
+
+  if (text === "") {
+    if (line.budget) {
+      budgets.delete(line.budget);
+    }
+
+    return;
+  }
+
+  let cents = parseMoneyInput(text);
+
+  if (Number.isNaN(cents) || cents < 0) {
+    return;
+  }
+
+  if (line.budget) {
+    if (line.budget.amountCents !== cents) {
+      budgets.update({ ...line.budget, amountCents: cents });
+    }
+  } else {
+    budgets.insert({ categoryId: line.id, amountCents: cents });
+  }
+}
+
+function onKey(e: KeyboardEvent, edit: Edit) {
+  if (e.key === "Enter") {
+    (e.target as HTMLInputElement).blur();
+  }
+
+  if (e.key === "Escape") {
+    edit.categoryId = "";
+  }
+}
+
+<html lang="en" class="page-home" (
+  accounts: LiveView<Account>,
+  categories: LiveView<Category>,
+  transactions: LiveView<Transaction>,
+  budgets: LiveView<Budget>,
+  view: View,
+  private edit: Edit = { categoryId: "", text: "" },
+)>
+  <head>
+    <title>Budget · thriftledger</title>
+    <meta name="description" content="Your monthly budget, by category.">
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <Layout active="/">
+      <div class="stack is-xl">
+        <div class="budget-head row">
+          <h1>Budget</h1>
+
+          <div class="month-nav row">
+            <button type="button" class="is-sm" aria-label="Previous month" onclick={() => onMonth(view, -1)}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3 L5 8 L10 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+            <span class="month-label">{monthLabel(view.month)}</span>
+            <button type="button" class="is-sm" aria-label="Next month" onclick={() => onMonth(view, 1)}>
+              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3 L11 8 L6 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            </button>
+          </div>
+        </div>
+
+        <BudgetTiles all={lines(categories, budgets, transactions, view.month)} month={view.month} />
+
+        <a e:if={uncategorizedCount(transactions, view.month) > 0}
+           class="callout is-warning"
+           href="/transactions?show=uncategorized">
+          <div class="callout-body">
+            <strong>{uncategorizedCount(transactions, view.month)} transactions</strong> this month have no category yet, so their spending is not in a budget. Categorize them →
+          </div>
+        </a>
+
+        <section class="card">
+          <div class="card-head section-title row">
+            <h2>Categories</h2>
+            <span class="hint">Click an amount to change the budget</span>
+          </div>
+
+          <ul class="budget-list">
+            <li e:for={line of lines(categories, budgets, transactions, view.month)} class="budget-row">
+              <div class="budget-name row">
+                <span class="swatch" style={`background: ${seriesColor(line.category)}`}></span>
+                <span>{line.name}</span>
+              </div>
+
+              <div class={["bar", !line.budget && "is-empty"]}
+                   role="img"
+                   aria-label={line.budget ? `${Math.round(share(line))}% of budget spent` : "no budget"}>
+                <div class={["bar-fill", level(line)]} style={`width: ${share(line)}%`}></div>
+              </div>
+
+              <div class="budget-spent">
+                <strong>{formatMoney(line.spentCents)}</strong>
+                <span e:if={line.id !== "uncategorized"} class="budget-amount">
+                  <span class="muted">{edit.categoryId === line.id || line.budget ? " of " : " · "}</span>
+                  <input e:if={edit.categoryId === line.id}
+                         class="is-sm"
+                         inputmode="decimal"
+                         aria-label={`Monthly budget for ${line.name}`}
+                         value={edit.text}
+                         placeholder="0.00"
+                         oninsert={(e) => (e.target as HTMLInputElement).select()}
+                         onblur={() => onCommit(budgets, edit, line)}
+                         onkeydown={(e) => onKey(e, edit)} />
+                  <button e:else
+                          type="button"
+                          class="is-bare budget-edit"
+                          onclick={() => onEdit(edit, line)}>{line.budget ? formatWholeMoney(line.budget.amountCents) : "set budget"}</button>
+                </span>
+              </div>
+
+              <div class="budget-left">
+                <span e:if={!line.budget} class="muted">—</span>
+                <span e:elseif={line.spentCents > line.budget!.amountCents} class="is-over">{formatMoney(line.spentCents - line.budget!.amountCents)} over</span>
+                <span e:else>{formatMoney(line.budget!.amountCents - line.spentCents)} left</span>
+              </div>
+            </li>
+          </ul>
+        </section>
+      </div>
+    </Layout>
+  </body>
+</html>
+
+<BudgetTiles (all: BudgetLine[], month: string)>
+  <div class="tiles">
+    <div class="card tile stack is-xs">
+      <span class="tile-label">Left to spend</span>
+      <span class={["tile-value", totals(all).remaining < 0 && "is-over"]}>{formatMoney(totals(all).remaining)}</span>
+      <span class="tile-sub" e:if={daysLeft(month) > 0}>{daysLeft(month) === 1 ? "Last day" : `${daysLeft(month)} days left`} of the month</span>
+      <span class="tile-sub" e:else>of {formatWholeMoney(totals(all).budgeted)} budgeted</span>
+    </div>
+
+    <div class="card tile stack is-xs">
+      <span class="tile-label">Spent</span>
+      <span class="tile-value">{formatMoney(totals(all).spent)}</span>
+      <span class="tile-sub">{formatMoney(totals(all).unbudgeted)} outside a budget</span>
+    </div>
+
+    <div class="card tile stack is-xs">
+      <span class="tile-label">Budgeted</span>
+      <span class="tile-value">{formatWholeMoney(totals(all).budgeted)}</span>
+      <span class="tile-sub">across {all.filter((l) => l.budget).length} categories</span>
+    </div>
+  </div>
+</BudgetTiles>

@@ -1,0 +1,92 @@
+.layout-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: color-mix(in oklab, var(--bg) 92%, transparent);
+  backdrop-filter: blur(8px);
+  border-bottom: 1px solid var(--rule);
+}
+
+.layout-bar {
+  padding-block: var(--space-3);
+  justify-content: space-between;
+  gap: var(--space-6);
+}
+
+.layout-brand {
+  gap: var(--space-2);
+  font-weight: var(--weight-semibold);
+  color: var(--ink);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.layout-mark {
+  display: inline-flex;
+  width: var(--space-6);
+  height: var(--space-6);
+  border-radius: var(--radius-sm);
+  background: var(--accent);
+  color: var(--accent-ink);
+  align-items: center;
+  justify-content: center;
+}
+
+.layout-nav {
+  flex: 1;
+  gap: var(--space-1);
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.layout-nav a {
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--ink-soft);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.layout-nav a:hover {
+  background: var(--bg-soft);
+  color: var(--ink);
+}
+
+.layout-nav a.is-active {
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.layout-user {
+  gap: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+
+.layout-main {
+  padding-block: var(--space-8) var(--space-16);
+}
+
+@media (max-width: 48rem) {
+  .layout-bar {
+    flex-wrap: wrap;
+    gap: var(--space-2);
+  }
+
+  .layout-nav {
+    order: 3;
+    flex-basis: 100%;
+    margin-inline: calc(-1 * var(--space-3));
+  }
+
+  .layout-user-name {
+    display: none;
+  }
+
+  .layout-main {
+    padding-block: var(--space-6) var(--space-12);
+  }
+}

@@ -1,0 +1,358 @@
+import "./style.css";
+import { LiveView, File } from "@elements/app";
+import { Layout } from "#app/shared/templates/layout";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+import { Account, CsvMapping, ImportRecord, Transaction, dayLabel, formatMoney } from "#app/shared/lib/ledger";
+import { CsvTable, ParsedRow, guessMapping, mapCsv, parseCsv } from "#app/shared/lib/csv";
+import { ImportResult, importCsv } from "#app/shared/services/ledger";
+
+export interface ImportState {
+  accountId: string;
+  fileName: string;
+  text: string;
+  table: CsvTable | null;
+  mapping: CsvMapping;
+  remembered: boolean;
+  error: string;
+  busy: boolean;
+  result: ImportResult | null;
+}
+
+interface PreviewRow extends ParsedRow {
+  id: string;
+  duplicate: boolean;
+}
+
+interface Preview {
+  rows: PreviewRow[];
+  fresh: number;
+  duplicates: number;
+  errors: string[];
+}
+
+function rowKey(postedOn: string, amountCents: number, description: string): string {
+  return `${postedOn}|${amountCents}|${description.trim().replace(/\s+/g, " ").toLowerCase()}`;
+}
+
+/**
+ * The same rule the server applies: the nth repeat of a date, amount and
+ * description is a duplicate when the account already holds n of them.
+ */
+export function preview(state: ImportState, transactions: LiveView<Transaction>): Preview {
+  if (!state.table) {
+    return { rows: [], fresh: 0, duplicates: 0, errors: [] };
+  }
+
+  let mapped = mapCsv(state.table, state.mapping);
+  let existing = new Map<string, number>();
+
+  for (let t of transactions) {
+    if (t.accountId === state.accountId) {
+      let key = rowKey(t.postedOn, t.amountCents, t.description);
+      existing.set(key, (existing.get(key) ?? 0) + 1);
+    }
+  }
+
+  let seen = new Map<string, number>();
+  let duplicates = 0;
+
+  let rows = mapped.rows.map((row, i) => {
+    let key = rowKey(row.postedOn, row.amountCents, row.description);
+    let n = (seen.get(key) ?? 0) + 1;
+    seen.set(key, n);
+
+    let duplicate = n <= (existing.get(key) ?? 0);
+
+    if (duplicate) {
+      duplicates++;
+    }
+
+    return { ...row, id: `r${i}`, duplicate };
+  });
+
+  return { rows, fresh: rows.length - duplicates, duplicates, errors: mapped.errors };
+}
+
+function applyRemembered(state: ImportState, accounts: LiveView<Account>) {
+  let saved = accounts.get(state.accountId)?.csvMapping;
+  let headers = state.table?.headers ?? [];
+
+  if (saved && [saved.dateColumn, saved.descriptionColumn, saved.amountColumn].every((h) => headers.includes(h))) {
+    state.mapping = { ...saved };
+    state.remembered = true;
+  } else {
+    state.mapping = guessMapping(headers);
+    state.remembered = false;
+  }
+}
+
+function onFile(e: Event, state: ImportState, accounts: LiveView<Account>) {
+  state.error = "";
+  state.result = null;
+
+  let files = File.read(e.target as HTMLInputElement);
+
+  if (files.length === 0) {
+    return;
+  }
+
+  let text = new TextDecoder().decode(files[0].data);
+  let table = parseCsv(text);
+
+  if (table.headers.length < 3 || table.rows.length === 0) {
+    state.error = `${files[0].name} does not look like a CSV export with a header row.`;
+    return;
+  }
+
+  state.fileName = files[0].name;
+  state.text = text;
+  state.table = table;
+  applyRemembered(state, accounts);
+}
+
+function onAccount(state: ImportState, accounts: LiveView<Account>) {
+  state.result = null;
+
+  if (state.table) {
+    applyRemembered(state, accounts);
+  }
+}
+
+function onImport(state: ImportState) {
+  state.busy = true;
+  state.error = "";
+
+  try {
+    state.result = importCsv({
+      accountId: state.accountId,
+      fileName: state.fileName,
+      text: state.text,
+      mapping: state.mapping,
+    });
+
+    state.table = null;
+    state.text = "";
+  } catch (err: any) {
+    state.error = err.message;
+  }
+
+  state.busy = false;
+}
+
+function onReset(state: ImportState) {
+  state.table = null;
+  state.text = "";
+  state.fileName = "";
+  state.error = "";
+}
+
+function accountLabel(accounts: LiveView<Account>, id: string): string {
+  return accounts.get(id)?.name ?? "Deleted account";
+}
+
+function newestImports(imports: LiveView<ImportRecord>): ImportRecord[] {
+  return imports.sort((a, b) => +new Date(b.createdAt) - +new Date(a.createdAt)).slice(0, 8);
+}
+
+<html lang="en" class="page-import" (
+  accounts: LiveView<Account>,
+  transactions: LiveView<Transaction>,
+  imports: LiveView<ImportRecord>,
+  initialAccountId: string,
+  private state: ImportState = {
+    accountId: initialAccountId || (accounts.at(0)?.id ?? ""),
+    fileName: "",
+    text: "",
+    table: null,
+    mapping: { dateColumn: "", descriptionColumn: "", amountColumn: "", invertAmounts: false },
+    remembered: false,
+    error: "",
+    busy: false,
+    result: null,
+  },
+)>
+  <head>
+    <title>Import · thriftledger</title>
+    <meta name="description" content="Import transactions from a bank CSV export.">
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <Layout active="/import">
+      <div class="stack is-xl">
+        <div class="stack is-xs">
+          <h1>Import</h1>
+          <p class="lede">Bring in a CSV export from your bank. Map its columns once per account; rows already in the ledger are skipped.</p>
+        </div>
+
+        <div class="import-grid">
+          <div class="stack is-lg">
+            <div e:if={state.result} class="callout is-success" role="status">
+              <div class="callout-title">
+                Added {state.result!.added} {state.result!.added === 1 ? "transaction" : "transactions"} to {accountLabel(accounts, state.accountId)}
+              </div>
+              <div class="callout-body stack is-sm">
+                <span>
+                  {state.result!.skipped} already in the ledger were skipped.
+                  {state.result!.categorized} were categorized by your rules{state.result!.added - state.result!.categorized > 0 ? `; ${state.result!.added - state.result!.categorized} are waiting for a category` : ""}.
+                </span>
+                <span class="cluster is-sm">
+                  <a class="button is-sm" href="/transactions?show=uncategorized" e:if={state.result!.added > state.result!.categorized}>Categorize them</a>
+                  <a class="button is-sm is-ghost" href="/">See the budget</a>
+                </span>
+              </div>
+            </div>
+
+            <section class="card">
+              <div class="card-body stack is-lg">
+                <div class="step-title row">
+                  <span class="step-num">1</span>
+                  <h2>Account and file</h2>
+                </div>
+
+                <div class="field">
+                  <label for="account">Import into</label>
+                  <select id="account" value={state.accountId} onchange={() => onAccount(state, accounts)}>
+                    <option e:for={a of accounts} value={a.id}>{a.name}{a.institution ? ` · ${a.institution}` : ""}</option>
+                  </select>
+                  <p class="hint" e:if={accounts.get(state.accountId)?.csvMapping}>This account's column mapping is saved from its last import.</p>
+                  <p class="hint" e:else>First import for this account: you'll map its columns below.</p>
+                </div>
+
+                <label e:if={!state.table} class="drop" for="file">
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                    <path d="M12 16 V4 M7 9 L12 4 L17 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+                    <path d="M4 15 V19 A1 1 0 0 0 5 20 H19 A1 1 0 0 0 20 19 V15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                  </svg>
+                  <strong>Choose a CSV file</strong>
+                  <span class="hint">Most banks offer one under "download transactions".</span>
+                  <span class="button is-sm">Browse files</span>
+                  <input id="file" type="file" accept=".csv,text/csv" onchange={(e) => onFile(e, state, accounts)} />
+                </label>
+
+                <div e:else class="row is-sm">
+                  <span class="pill">{state.fileName}</span>
+                  <span class="hint">{state.table!.rows.length} rows</span>
+                  <button type="button" class="is-ghost is-sm" onclick={() => onReset(state)}>Choose another file</button>
+                </div>
+
+                <p e:if={state.error} class="error" role="alert">{state.error}</p>
+              </div>
+            </section>
+
+            <section e:if={state.table} class="card">
+              <div class="card-body stack is-lg">
+                <div class="step-title row">
+                  <span class="step-num">2</span>
+                  <h2>Columns</h2>
+                  <span e:if={state.remembered} class="pill is-success">Saved mapping</span>
+                </div>
+
+                <div class="mapping">
+                  <div class="field">
+                    <label for="map-date">Date</label>
+                    <select id="map-date" value={state.mapping.dateColumn}>
+                      <option e:for={h of state.table!.headers.map((h) => ({ id: h }))} value={h.id}>{h.id}</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label for="map-desc">Description</label>
+                    <select id="map-desc" value={state.mapping.descriptionColumn}>
+                      <option e:for={h of state.table!.headers.map((h) => ({ id: h }))} value={h.id}>{h.id}</option>
+                    </select>
+                  </div>
+
+                  <div class="field">
+                    <label for="map-amount">Amount</label>
+                    <select id="map-amount" value={state.mapping.amountColumn}>
+                      <option e:for={h of state.table!.headers.map((h) => ({ id: h }))} value={h.id}>{h.id}</option>
+                    </select>
+                  </div>
+                </div>
+
+                <label class="row is-sm">
+                  <input type="checkbox" checked={state.mapping.invertAmounts} />
+                  This export shows purchases as positive amounts
+                </label>
+              </div>
+            </section>
+
+            <section e:if={state.table} class="card">
+              <div class="card-body stack is-lg">
+                <div class="step-title row">
+                  <span class="step-num">3</span>
+                  <h2>Review</h2>
+                </div>
+
+                <div class="counts cluster">
+                  <span class="pill is-accent">{preview(state, transactions).fresh} new</span>
+                  <span class="pill">{preview(state, transactions).duplicates} already imported</span>
+                  <span e:if={preview(state, transactions).errors.length > 0} class="pill is-warning">{preview(state, transactions).errors.length} unreadable</span>
+                </div>
+
+                <div class="preview-wrap">
+                  <table class="preview">
+                    <thead>
+                      <tr>
+                        <th>Date</th>
+                        <th>Description</th>
+                        <th class="num">Amount</th>
+                        <th></th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      <tr e:for={row of preview(state, transactions).rows.slice(0, 8)} class={[row.duplicate && "is-dupe"]}>
+                        <td>{dayLabel(row.postedOn)}</td>
+                        <td>{row.description}</td>
+                        <td class="num">{formatMoney(row.amountCents)}</td>
+                        <td><span e:if={row.duplicate} class="hint">skip</span></td>
+                      </tr>
+                    </tbody>
+                  </table>
+                </div>
+
+                <p e:if={preview(state, transactions).rows.length > 8} class="hint">and {preview(state, transactions).rows.length - 8} more</p>
+
+                <ul e:if={preview(state, transactions).errors.length > 0} class="errors error">
+                  <li e:for={line of preview(state, transactions).errors.slice(0, 5).map((text, i) => ({ id: String(i), text }))}>{line.text}</li>
+                </ul>
+
+                <div class="row">
+                  <button type="button"
+                          class={["is-primary", state.busy && "is-loading"]}
+                          disabled={state.busy || preview(state, transactions).fresh === 0}
+                          onclick={() => onImport(state)}>
+                    Import {preview(state, transactions).fresh} {preview(state, transactions).fresh === 1 ? "transaction" : "transactions"}
+                  </button>
+                </div>
+              </div>
+            </section>
+          </div>
+
+          <aside class="stack is-lg">
+            <section class="card">
+              <div class="card-head"><h2>Try it</h2></div>
+              <div class="card-body stack is-sm">
+                <p>Download a sample export from the Cashback Card: two weeks you already have and six new purchases.</p>
+                <a class="button is-sm" href="/import/sample.csv" download>Download sample CSV</a>
+              </div>
+            </section>
+
+            <section class="card">
+              <div class="card-head"><h2>Recent imports</h2></div>
+              <div class="card-body">
+                <ul class="history" e:if={imports.length > 0}>
+                  <li e:for={record of newestImports(imports)}>
+                    <strong>{record.fileName}</strong>
+                    <span>{accountLabel(accounts, record.accountId)} · {record.addedCount} added, {record.skippedCount} skipped · {new Date(record.createdAt).toLocaleDateString("en-US", { month: "short", day: "numeric" })}</span>
+                  </li>
+                </ul>
+                <p e:else class="hint">Nothing imported yet.</p>
+              </div>
+            </section>
+          </aside>
+        </div>
+      </div>
+    </Layout>
+  </body>
+</html>

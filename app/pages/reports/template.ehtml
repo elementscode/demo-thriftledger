@@ -1,0 +1,473 @@
+import "./style.css";
+import { LiveView } from "@elements/app";
+import { Layout } from "#app/shared/templates/layout";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+import {
+  Account,
+  Category,
+  Transaction,
+  UNCATEGORIZED,
+  byCategoryId,
+  currentMonth,
+  dayLabel,
+  formatMoney,
+  formatWholeMoney,
+  monthLabel,
+  monthOf,
+  monthlyFlows,
+  netWorthSeries,
+  shiftMonth,
+  spendingByCategory,
+} from "#app/shared/lib/ledger";
+import { arcPath, columnPath, compactMoney, niceTicks } from "./charts";
+
+interface View {
+  month: string;
+}
+
+interface Hover {
+  id: string;
+}
+
+interface Size {
+  width: number;
+}
+
+interface Slice {
+  id: string;
+  name: string;
+  color: string;
+  cents: number;
+  share: number;
+  path: string;
+}
+
+const OTHER = "other";
+const INCOME = "var(--series-1)";
+const SPENDING = "var(--series-2)";
+const NET_WORTH = "var(--series-1)";
+
+function observe(e: { target: Element }, size: Size) {
+  let el = e.target as HTMLElement;
+  size.width = el.clientWidth;
+  new ResizeObserver(() => size.width = el.clientWidth).observe(el);
+}
+
+function lastSixMonths(): string[] {
+  let now = currentMonth();
+  return [-5, -4, -3, -2, -1, 0].map((by) => shiftMonth(now, by));
+}
+
+function onMonth(view: View, by: number) {
+  view.month = shiftMonth(view.month, by);
+  history.replaceState(null, "", view.month === currentMonth() ? "/reports" : `/reports?month=${view.month}`);
+}
+
+/**
+ * The eight categories holding a chart color keep it; everything else,
+ * uncategorized included, is one grey "Other" so no color is ever invented.
+ */
+export function slices(categories: LiveView<Category>, transactions: LiveView<Transaction>, month: string): Slice[] {
+  let byId = byCategoryId(categories);
+  let spent = spendingByCategory(transactions, byId, month);
+  let rows: Slice[] = [];
+  let other = 0;
+  let total = 0;
+
+  for (let [id, cents] of spent) {
+    if (cents <= 0) {
+      continue;
+    }
+
+    total += cents;
+
+    let category = id === UNCATEGORIZED ? undefined : byId.get(id);
+
+    if (category?.colorSlot) {
+      rows.push({ id, name: category.name, color: `var(--series-${category.colorSlot})`, cents, share: 0, path: "" });
+    } else {
+      other += cents;
+    }
+  }
+
+  rows.sort((a, b) => b.cents - a.cents);
+
+  if (other > 0) {
+    rows.push({ id: OTHER, name: "Other", color: "var(--series-other)", cents: other, share: 0, path: "" });
+  }
+
+  let angle = 0;
+
+  for (let row of rows) {
+    row.share = row.cents / total;
+
+    let sweep = row.share * Math.PI * 2;
+    row.path = arcPath(110, 110, 104, 70, angle, angle + sweep);
+    angle += sweep;
+  }
+
+  return rows;
+}
+
+function total(rows: Slice[]): number {
+  return rows.reduce((sum, r) => sum + r.cents, 0);
+}
+
+function otherNames(categories: LiveView<Category>, transactions: LiveView<Transaction>, month: string): string {
+  let byId = byCategoryId(categories);
+  let names: string[] = [];
+
+  for (let [id, cents] of spendingByCategory(transactions, byId, month)) {
+    if (cents <= 0) {
+      continue;
+    }
+
+    let category = id === UNCATEGORIZED ? undefined : byId.get(id);
+
+    if (!category?.colorSlot) {
+      names.push(category?.name ?? "Uncategorized");
+    }
+  }
+
+  return names.sort().join(", ");
+}
+
+const BAR_H = 240;
+const PAD = { top: 12, right: 8, bottom: 28, left: 52 };
+
+interface BarGeometry {
+  ticks: { id: string; y: number; label: string }[];
+  months: {
+    id: string;
+    label: string;
+    x: number;
+    band: number;
+    income: string;
+    spending: string;
+    incomeCents: number;
+    spendingCents: number;
+  }[];
+  baseline: number;
+}
+
+export function bars(categories: LiveView<Category>, transactions: LiveView<Transaction>, width: number): BarGeometry {
+  let flows = monthlyFlows(transactions, byCategoryId(categories), lastSixMonths());
+  let max = Math.max(1, ...flows.map((f) => Math.max(f.incomeCents, f.spendingCents)));
+  let values = niceTicks(0, max, 4);
+  let top = values[values.length - 1];
+  let plotW = Math.max(120, width - PAD.left - PAD.right);
+  let plotH = BAR_H - PAD.top - PAD.bottom;
+  let y = (v: number) => PAD.top + plotH - (v / top) * plotH;
+  let band = plotW / flows.length;
+  let col = Math.min(24, Math.max(6, band * 0.28));
+
+  return {
+    baseline: y(0),
+    ticks: values.map((v) => ({ id: String(v), y: y(v), label: compactMoney(v) })),
+    months: flows.map((f, i) => {
+      let center = PAD.left + band * i + band / 2;
+
+      return {
+        id: f.month,
+        label: monthLabel(f.month, "short"),
+        x: center,
+        band,
+        income: columnPath(center - col - 1, col, y(0), y(Math.max(0, f.incomeCents))),
+        spending: columnPath(center + 1, col, y(0), y(Math.max(0, f.spendingCents))),
+        incomeCents: f.incomeCents,
+        spendingCents: f.spendingCents,
+      };
+    }),
+  };
+}
+
+const LINE_H = 260;
+
+interface LineGeometry {
+  path: string;
+  area: string;
+  ticks: { id: string; y: number; label: string }[];
+  labels: { id: string; x: number; label: string }[];
+  points: { id: string; x: number; y: number; day: string; cents: number }[];
+  first: number;
+  last: number;
+}
+
+function netWorthLine(accounts: LiveView<Account>, transactions: LiveView<Transaction>, width: number): LineGeometry {
+  let series = netWorthSeries(accounts, transactions);
+  let values = series.map((p) => p.cents);
+  let ticks = niceTicks(Math.min(...values), Math.max(...values), 4, false);
+  let lo = ticks[0];
+  let hi = ticks[ticks.length - 1];
+  let plotW = Math.max(120, width - PAD.left - PAD.right - 16);
+  let plotH = LINE_H - PAD.top - PAD.bottom;
+  let x = (i: number) => PAD.left + (series.length === 1 ? plotW / 2 : (i / (series.length - 1)) * plotW);
+  let y = (v: number) => PAD.top + plotH - ((v - lo) / (hi - lo || 1)) * plotH;
+  let points = series.map((p, i) => ({ id: p.day, x: x(i), y: y(p.cents), day: p.day, cents: p.cents }));
+  let path = points.map((p, i) => `${i === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+  let bottom = PAD.top + plotH;
+  let labels: LineGeometry["labels"] = [];
+  let seen = new Set<string>();
+
+  for (let p of points) {
+    let month = monthOf(p.day);
+
+    if (!seen.has(month)) {
+      seen.add(month);
+      labels.push({ id: month, x: p.x, label: monthLabel(month, "short") });
+    }
+  }
+
+  return {
+    path,
+    area: points.length > 1 ? `${path} L ${points[points.length - 1].x.toFixed(1)} ${bottom} L ${points[0].x.toFixed(1)} ${bottom} Z` : "",
+    ticks: ticks.map((v) => ({ id: String(v), y: y(v), label: compactMoney(v) })),
+    labels: labels.slice(1),
+    points,
+    first: series[0].cents,
+    last: series[series.length - 1].cents,
+  };
+}
+
+function nearest(e: MouseEvent, points: { x: number }[]): number {
+  let svg = (e.currentTarget as SVGElement).ownerSVGElement ?? (e.currentTarget as SVGSVGElement);
+  let x = e.clientX - svg.getBoundingClientRect().left;
+  let best = 0;
+
+  points.forEach((p, i) => {
+    if (Math.abs(p.x - x) < Math.abs(points[best].x - x)) {
+      best = i;
+    }
+  });
+
+  return best;
+}
+
+<html lang="en" class="page-reports" (
+  accounts: LiveView<Account>,
+  categories: LiveView<Category>,
+  transactions: LiveView<Transaction>,
+  view: View,
+)>
+  <head>
+    <title>Reports · thriftledger</title>
+    <meta name="description" content="Spending by category, income against spending, and net worth.">
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <Layout active="/reports" wide={true}>
+      <div class="stack is-xl">
+        <div class="reports-head row">
+          <h1>Reports</h1>
+        </div>
+
+        <div class="reports-grid">
+          <SpendingDonut {categories} {transactions} {view} />
+          <FlowBars {categories} {transactions} />
+        </div>
+
+        <NetWorth {accounts} {transactions} />
+      </div>
+    </Layout>
+  </body>
+</html>
+
+<SpendingDonut (
+  categories: LiveView<Category>,
+  transactions: LiveView<Transaction>,
+  view: View,
+  private hover: Hover = { id: "" },
+)>
+  <section class="card chart-card">
+    <div class="card-head">
+      <h2>Spending by category</h2>
+      <div class="row is-sm">
+        <button type="button" class="is-ghost is-sm" aria-label="Previous month" onclick={() => onMonth(view, -1)}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3 L5 8 L10 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+        <span class="chart-sub">{monthLabel(view.month)}</span>
+        <button type="button" class="is-ghost is-sm" aria-label="Next month" onclick={() => onMonth(view, 1)}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3 L11 8 L6 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="card-body stack is-lg">
+      <div e:if={slices(categories, transactions, view.month).length > 0} class="donut-wrap">
+        <div class="chart">
+          <svg class={hover.id ? "donut has-hover" : "donut"} width="220" height="220" viewBox="0 0 220 220" role="img"
+               aria-label={`Spending in ${monthLabel(view.month)}: ${formatMoney(total(slices(categories, transactions, view.month)))}`}>
+            <path e:for={s of slices(categories, transactions, view.month)}
+                  d={s.path}
+                  fill={s.color}
+                  class={hover.id === s.id ? "is-hover" : ""}
+                  onmouseenter={() => hover.id = s.id}
+                  onmouseleave={() => hover.id = ""} />
+            <text class="donut-label" x="110" y="102" text-anchor="middle">
+              {hover.id ? slices(categories, transactions, view.month).find((s) => s.id === hover.id)?.name ?? "Spent" : "Spent"}
+            </text>
+            <text class="donut-total" x="110" y="128" text-anchor="middle">
+              {formatWholeMoney(hover.id ? slices(categories, transactions, view.month).find((s) => s.id === hover.id)?.cents ?? 0 : total(slices(categories, transactions, view.month)))}
+            </text>
+          </svg>
+        </div>
+
+        <ul class="donut-legend">
+          <li e:for={s of slices(categories, transactions, view.month)}
+              class={[hover.id === s.id && "is-hover"]}
+              title={s.id === "other" ? otherNames(categories, transactions, view.month) : undefined}
+              onmouseenter={() => hover.id = s.id}
+              onmouseleave={() => hover.id = ""}>
+            <span class="key" style={`background: ${s.color}`}></span>
+            <span class="name">{s.name}</span>
+            <span class="amount">{formatWholeMoney(s.cents)}</span>
+            <span class="pct">{Math.round(s.share * 100)}%</span>
+          </li>
+        </ul>
+      </div>
+
+      <p e:else class="chart-empty">No spending in {monthLabel(view.month)}.</p>
+
+      <p e:if={slices(categories, transactions, view.month).some((s) => s.id === "other")} class="hint">
+        Other: {otherNames(categories, transactions, view.month)}.
+      </p>
+    </div>
+  </section>
+</SpendingDonut>
+
+<FlowBars (
+  categories: LiveView<Category>,
+  transactions: LiveView<Transaction>,
+  private hover: Hover = { id: "" },
+  private size: Size = { width: 560 },
+)>
+  <section class="card chart-card">
+    <div class="card-head">
+      <h2>Income and spending</h2>
+      <div class="legend row">
+        <span><span class="key" style={`background: ${INCOME}`}></span>Income</span>
+        <span><span class="key" style={`background: ${SPENDING}`}></span>Spending</span>
+      </div>
+    </div>
+
+    <div class="card-body stack is-md">
+      <div class="chart" oninsert={(e) => observe(e, size)}>
+        <svg width={size.width} height={BAR_H} viewBox={`0 0 ${size.width} ${BAR_H}`} role="img" aria-label="Income and spending for the last six months">
+          <rect e:for={m of bars(categories, transactions, size.width).months}
+                class={hover.id === m.id ? "band is-hover" : "band"}
+                x={m.x - m.band / 2 + 2} y={PAD.top} width={m.band - 4} height={BAR_H - PAD.top - PAD.bottom}
+                rx="4" fill="transparent" />
+          <line e:for={t of bars(categories, transactions, size.width).ticks}
+                class="grid" x1={PAD.left} x2={size.width - PAD.right} y1={t.y} y2={t.y} />
+          <text e:for={t of bars(categories, transactions, size.width).ticks}
+                x={PAD.left - 8} y={t.y + 4} text-anchor="end">{t.label}</text>
+          <line class="baseline" x1={PAD.left} x2={size.width - PAD.right}
+                y1={bars(categories, transactions, size.width).baseline} y2={bars(categories, transactions, size.width).baseline} />
+          <g e:for={m of bars(categories, transactions, size.width).months}>
+            <path d={m.income} fill={INCOME} />
+            <path d={m.spending} fill={SPENDING} />
+            <text x={m.x} y={BAR_H - 8} text-anchor="middle">{m.label}</text>
+            <rect class="hit" x={m.x - m.band / 2} y="0" width={m.band} height={BAR_H}
+                  onmouseenter={() => hover.id = m.id} onmouseleave={() => hover.id = ""} />
+          </g>
+        </svg>
+
+        <div e:for={m of bars(categories, transactions, size.width).months.filter((m) => m.id === hover.id)}
+             class="tooltip"
+             style={`left: ${m.x}px; top: ${PAD.top + 90}px`}>
+          <strong>{monthLabel(m.id)}</strong>
+          <div class="tooltip-row"><span><span class="key" style={`background: ${INCOME}`}></span>Income</span>{formatMoney(m.incomeCents)}</div>
+          <div class="tooltip-row"><span><span class="key" style={`background: ${SPENDING}`}></span>Spending</span>{formatMoney(m.spendingCents)}</div>
+          <div class="tooltip-row"><span>Saved</span>{formatMoney(m.incomeCents - m.spendingCents)}</div>
+        </div>
+      </div>
+
+      <details class="chart-table">
+        <summary>Show as a table</summary>
+        <table>
+          <thead><tr><th>Month</th><th class="num">Income</th><th class="num">Spending</th><th class="num">Saved</th></tr></thead>
+          <tbody>
+            <tr e:for={m of bars(categories, transactions, size.width).months}>
+              <td>{monthLabel(m.id)}</td>
+              <td class="num">{formatMoney(m.incomeCents)}</td>
+              <td class="num">{formatMoney(m.spendingCents)}</td>
+              <td class="num">{formatMoney(m.incomeCents - m.spendingCents)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
+    </div>
+  </section>
+</FlowBars>
+
+<NetWorth (
+  accounts: LiveView<Account>,
+  transactions: LiveView<Transaction>,
+  private hover: { index: number } = { index: -1 },
+  private size: Size = { width: 1100 },
+)>
+  <section class="card chart-card">
+    <div class="card-head">
+      <div class="stack is-xs">
+        <h2>Net worth</h2>
+        <span class="chart-sub">Every account, credit card debt subtracted</span>
+      </div>
+      <div class="stack is-xs" style="text-align: right">
+        <span class="hero-figure">{formatMoney(netWorthLine(accounts, transactions, size.width).last)}</span>
+        <span class={["delta", netWorthLine(accounts, transactions, size.width).last >= netWorthLine(accounts, transactions, size.width).first ? "is-up" : "is-down"]}>
+          {netWorthLine(accounts, transactions, size.width).last >= netWorthLine(accounts, transactions, size.width).first ? "▲" : "▼"}
+          {formatMoney(Math.abs(netWorthLine(accounts, transactions, size.width).last - netWorthLine(accounts, transactions, size.width).first))} since {dayLabel(netWorthLine(accounts, transactions, size.width).points[0].day)}
+        </span>
+      </div>
+    </div>
+
+    <div class="card-body stack is-md">
+      <div class="chart" oninsert={(e) => observe(e, size)}>
+        <svg width={size.width} height={LINE_H} viewBox={`0 0 ${size.width} ${LINE_H}`} role="img" aria-label="Net worth by week">
+          <line e:for={t of netWorthLine(accounts, transactions, size.width).ticks}
+                class="grid" x1={PAD.left} x2={size.width - PAD.right} y1={t.y} y2={t.y} />
+          <text e:for={t of netWorthLine(accounts, transactions, size.width).ticks}
+                x={PAD.left - 8} y={t.y + 4} text-anchor="end">{t.label}</text>
+          <text e:for={l of netWorthLine(accounts, transactions, size.width).labels}
+                x={l.x} y={LINE_H - 8} text-anchor="middle">{l.label}</text>
+          <path d={netWorthLine(accounts, transactions, size.width).area} fill={NET_WORTH} fill-opacity="0.1" />
+          <path d={netWorthLine(accounts, transactions, size.width).path} fill="none" stroke={NET_WORTH} stroke-width="2" stroke-linejoin="round" stroke-linecap="round" />
+
+          <g e:for={p of netWorthLine(accounts, transactions, size.width).points.filter((p, i) => i === hover.index)}>
+            <line class="crosshair" x1={p.x} x2={p.x} y1={PAD.top} y2={LINE_H - PAD.bottom} />
+            <circle cx={p.x} cy={p.y} r="5" fill={NET_WORTH} stroke="var(--bg)" stroke-width="2" />
+          </g>
+
+          <circle e:if={hover.index < 0}
+                  cx={netWorthLine(accounts, transactions, size.width).points.at(-1)!.x}
+                  cy={netWorthLine(accounts, transactions, size.width).points.at(-1)!.y}
+                  r="5" fill={NET_WORTH} stroke="var(--bg)" stroke-width="2" />
+
+          <rect class="hit" x={PAD.left} y="0" width={Math.max(0, size.width - PAD.left - PAD.right)} height={LINE_H}
+                onmousemove={(e) => hover.index = nearest(e, netWorthLine(accounts, transactions, size.width).points)}
+                onmouseleave={() => hover.index = -1} />
+        </svg>
+
+        <div e:for={p of netWorthLine(accounts, transactions, size.width).points.filter((p, i) => i === hover.index)}
+             class="tooltip"
+             style={`left: ${p.x}px; top: ${p.y}px`}>
+          <strong>{dayLabel(p.day)}</strong>
+          <div class="tooltip-row"><span>Net worth</span>{formatMoney(p.cents)}</div>
+        </div>
+      </div>
+
+      <details class="chart-table">
+        <summary>Show as a table</summary>
+        <table>
+          <thead><tr><th>Week ending</th><th class="num">Net worth</th></tr></thead>
+          <tbody>
+            <tr e:for={p of netWorthLine(accounts, transactions, size.width).points}>
+              <td>{dayLabel(p.day)}</td>
+              <td class="num">{formatMoney(p.cents)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </details>
+    </div>
+  </section>
+</NetWorth>

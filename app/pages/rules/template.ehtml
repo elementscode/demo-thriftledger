@@ -1,0 +1,237 @@
+import "./style.css";
+import { LiveView } from "@elements/app";
+import { Layout } from "#app/shared/templates/layout";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+import { Account, Category, CategoryKind, Rule, Transaction, isCategorized } from "#app/shared/lib/ledger";
+import { seriesColor } from "#app/shared/lib/colors";
+import { applyRules } from "#app/shared/services/ledger";
+
+interface RuleDraft {
+  pattern: string;
+  categoryId: string;
+  search: string;
+  error: string;
+  applied: string;
+}
+
+interface CategoryDraft {
+  name: string;
+  kind: CategoryKind;
+  error: string;
+}
+
+const GROUPS: { id: CategoryKind; label: string }[] = [
+  { id: "expense", label: "Spending" },
+  { id: "income", label: "Income" },
+  { id: "transfer", label: "Transfers" },
+];
+
+function sorted(categories: LiveView<Category>, kind: CategoryKind): Category[] {
+  return categories.filter((c) => c.kind === kind).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function visibleRules(rules: LiveView<Rule>, categories: LiveView<Category>, search: string): Rule[] {
+  let q = search.trim().toLowerCase();
+
+  return rules
+    .filter((r) => q === "" || r.pattern.includes(q) || (categories.get(r.categoryId)?.name.toLowerCase().includes(q) ?? false))
+    .sort((a, b) => a.pattern.localeCompare(b.pattern));
+}
+
+function matchCount(transactions: LiveView<Transaction>, rule: Rule): number {
+  return transactions.filter((t) => t.description.toLowerCase().includes(rule.pattern)).length;
+}
+
+function uncategorized(transactions: LiveView<Transaction>): number {
+  return transactions.filter((t) => !isCategorized(t)).length;
+}
+
+export function waitingFor(transactions: LiveView<Transaction>, rules: LiveView<Rule>): number {
+  return transactions.filter((t) => !isCategorized(t) && rules.some((r) => t.description.toLowerCase().includes(r.pattern))).length;
+}
+
+function usage(transactions: LiveView<Transaction>, category: Category): number {
+  let n = 0;
+
+  for (let t of transactions) {
+    if (t.categoryId === category.id || t.splits?.some((p) => p.categoryId === category.id)) {
+      n++;
+    }
+  }
+
+  return n;
+}
+
+function onAddRule(rules: LiveView<Rule>, draft: RuleDraft) {
+  draft.error = "";
+
+  if (draft.pattern.trim().length < 2) {
+    draft.error = "a rule needs at least two characters to match";
+    return;
+  }
+
+  if (!draft.categoryId) {
+    draft.error = "choose the category it files into";
+    return;
+  }
+
+  try {
+    rules.insert(
+      { pattern: draft.pattern.trim().toLowerCase(), categoryId: draft.categoryId, createdAt: new Date() },
+      () => draft.pattern = "",
+    );
+  } catch (err: any) {
+    draft.error = err.message;
+  }
+}
+
+function onRuleCategory(rules: LiveView<Rule>, rule: Rule, categoryId: string) {
+  rules.update({ ...rule, categoryId });
+}
+
+function onApply(draft: RuleDraft) {
+  let n = applyRules();
+  draft.applied = n === 0 ? "No uncategorized transactions matched a rule." : `Categorized ${n} ${n === 1 ? "transaction" : "transactions"}.`;
+}
+
+function onAddCategory(categories: LiveView<Category>, draft: CategoryDraft) {
+  draft.error = "";
+
+  if (draft.name.trim() === "") {
+    draft.error = "give the category a name";
+    return;
+  }
+
+  try {
+    categories.insert({ name: draft.name.trim(), kind: draft.kind, colorSlot: null }, () => draft.name = "");
+  } catch (err: any) {
+    draft.error = err.message;
+  }
+}
+
+function onDeleteCategory(categories: LiveView<Category>, category: Category, count: number) {
+  let message = count > 0
+    ? `Delete ${category.name}? Its ${count} transactions become uncategorized, and its rules and budget go too.`
+    : `Delete ${category.name}?`;
+
+  if (confirm(message)) {
+    categories.delete(category);
+  }
+}
+
+<html lang="en" class="page-rules" (
+  accounts: LiveView<Account>,
+  categories: LiveView<Category>,
+  transactions: LiveView<Transaction>,
+  rules: LiveView<Rule>,
+  private draft: RuleDraft = { pattern: "", categoryId: "", search: "", error: "", applied: "" },
+  private categoryDraft: CategoryDraft = { name: "", kind: "expense" as CategoryKind, error: "" },
+)>
+  <head>
+    <title>Rules · thriftledger</title>
+    <meta name="description" content="Rules that categorize transactions by description, and your categories.">
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <Layout active="/rules">
+      <div class="stack is-xl">
+        <div class="stack is-xs">
+          <h1>Rules</h1>
+          <p class="lede">A rule files every transaction whose description contains its text. The longest match wins, so "hollow oak" beats "oak".</p>
+        </div>
+
+        <div class="rules-grid">
+          <div class="stack is-lg">
+            <section class="card">
+              <div class="card-head"><h2>New rule</h2></div>
+              <form class="card-body stack is-sm" onsubmit={() => onAddRule(rules, draft)}>
+                <div class="rule-add">
+                  <div class="field">
+                    <label for="rule-pattern">Description contains</label>
+                    <input id="rule-pattern" value={draft.pattern} placeholder="fernleaf market" autocapitalize="none" spellcheck={false} />
+                  </div>
+                  <div class="field">
+                    <label for="rule-category">File it under</label>
+                    <select id="rule-category" value={draft.categoryId}>
+                      <option value="">Choose…</option>
+                      <optgroup e:for={group of GROUPS} label={group.label}>
+                        <option e:for={c of sorted(categories, group.id)} value={c.id}>{c.name}</option>
+                      </optgroup>
+                    </select>
+                  </div>
+                  <button type="submit" class="is-primary">Add rule</button>
+                </div>
+                <p e:if={draft.error} class="error">{draft.error}</p>
+                <p e:else class="hint">New rules also categorize the matching transactions already waiting.</p>
+              </form>
+            </section>
+
+            <section class="card">
+              <div class="card-head split">
+                <h2>{rules.length} rules</h2>
+                <div class="row is-sm">
+                  <span class="hint" e:if={draft.applied}>{draft.applied}</span>
+                  <button type="button" class="is-sm" disabled={waitingFor(transactions, rules) === 0} onclick={() => onApply(draft)}>
+                    Apply to {waitingFor(transactions, rules)} uncategorized
+                  </button>
+                </div>
+              </div>
+
+              <div class="rule-search">
+                <input type="search" class="is-sm" value={draft.search} placeholder="Filter rules" aria-label="Filter rules" />
+              </div>
+
+              <ul class="rule-list">
+                <li e:for={rule of visibleRules(rules, categories, draft.search)} class="rule-row">
+                  <span class="rule-pattern" title={rule.pattern}>{rule.pattern}</span>
+                  <svg class="rule-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8 H12 M9 5 L12 8 L9 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  <select class="is-sm"
+                          aria-label={`Category for ${rule.pattern}`}
+                          onchange={(e) => onRuleCategory(rules, rule, (e.target as HTMLSelectElement).value)}>
+                    <optgroup e:for={group of GROUPS} label={group.label}>
+                      <option e:for={c of sorted(categories, group.id)} value={c.id} selected={rule.categoryId === c.id}>{c.name}</option>
+                    </optgroup>
+                  </select>
+                  <span class="rule-count">{matchCount(transactions, rule)} {matchCount(transactions, rule) === 1 ? "match" : "matches"}</span>
+                  <button type="button" class="is-ghost is-sm" aria-label={`Delete rule ${rule.pattern}`} onclick={() => rules.delete(rule)}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4 L12 12 M12 4 L4 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                  </button>
+                </li>
+              </ul>
+            </section>
+          </div>
+
+          <section class="card">
+            <div class="card-head split">
+              <h2>Categories</h2>
+              <a class="hint" href="/transactions?show=uncategorized" e:if={uncategorized(transactions) > 0}>{uncategorized(transactions)} uncategorized</a>
+            </div>
+
+            <div e:for={group of GROUPS} class="cat-group">
+              <h3>{group.label}</h3>
+              <ul class="cat-list">
+                <li e:for={c of sorted(categories, group.id)} class="cat-row">
+                  <span class="swatch" style={`background: ${seriesColor(c)}`}></span>
+                  <span>{c.name}</span>
+                  <small>{usage(transactions, c)}</small>
+                  <button type="button" class="is-ghost is-sm" aria-label={`Delete ${c.name}`} onclick={() => onDeleteCategory(categories, c, usage(transactions, c))}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4 L12 12 M12 4 L4 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                  </button>
+                </li>
+              </ul>
+            </div>
+
+            <form class="card-foot cat-add" onsubmit={() => onAddCategory(categories, categoryDraft)}>
+              <input value={categoryDraft.name} placeholder="New category" aria-label="New category name" class="is-sm" />
+              <select value={categoryDraft.kind} aria-label="Kind" class="is-sm">
+                <option e:for={group of GROUPS} value={group.id}>{group.label}</option>
+              </select>
+              <button type="submit" class="is-sm">Add</button>
+            </form>
+            <p e:if={categoryDraft.error} class="error card-body">{categoryDraft.error}</p>
+          </section>
+        </div>
+      </div>
+    </Layout>
+  </body>
+</html>
