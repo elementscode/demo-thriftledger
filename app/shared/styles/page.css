@@ -1,0 +1,11 @@
+@import "@elements/style";
+@import "./vars.css";
+
+a.callout {
+  display: block;
+  text-decoration: none;
+}
+
+a.callout:hover {
+  text-decoration: underline;
+}

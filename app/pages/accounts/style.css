@@ -1,0 +1,145 @@
+@import "#app/shared/styles/page.css";
+
+.acct-summary {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-4);
+}
+
+.acct-summary .card {
+  padding: var(--space-5);
+}
+
+.acct-label {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.acct-value {
+  font-size: var(--text-2xl);
+  font-weight: var(--weight-semibold);
+  letter-spacing: -0.01em;
+}
+
+.acct-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.acct-row {
+  display: grid;
+  grid-template-columns: 2.5rem minmax(0, 1fr) auto auto;
+  gap: var(--space-4);
+  align-items: center;
+  padding: var(--space-4) var(--space-5);
+  border-top: 1px solid var(--rule-soft);
+}
+
+.acct-row:first-child {
+  border-top: none;
+}
+
+.acct-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  color: var(--accent-deep);
+}
+
+.acct-icon.is-credit {
+  background: var(--bg-muted);
+  color: var(--ink-soft);
+}
+
+.acct-name strong {
+  display: block;
+  font-weight: var(--weight-semibold);
+}
+
+.acct-name small {
+  color: var(--ink-soft);
+}
+
+.acct-balance {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+
+.acct-balance strong {
+  display: block;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
+}
+
+.acct-balance small {
+  color: var(--ink-soft);
+}
+
+.acct-actions {
+  gap: var(--space-1);
+}
+
+.acct-form {
+  display: grid;
+  grid-template-columns: 1.4fr 1fr 1.2fr 1fr;
+  gap: var(--space-4);
+  align-items: end;
+}
+
+.acct-form .field {
+  margin: 0;
+}
+
+.acct-form-foot {
+  justify-content: flex-end;
+  gap: var(--space-3);
+}
+
+@media (max-width: 48rem) {
+  .acct-summary {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  .acct-summary .card:first-child {
+    grid-column: 1 / -1;
+  }
+
+  .acct-row {
+    grid-template-columns: 2.5rem minmax(0, 1fr) auto;
+    padding: var(--space-4);
+  }
+
+  .acct-actions {
+    grid-column: 2 / -1;
+  }
+
+  .acct-form {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 30rem) {
+  .acct-value {
+    font-size: var(--text-xl);
+  }
+
+  .acct-row {
+    grid-template-columns: 2.5rem minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .acct-balance {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .acct-balance strong {
+    display: inline;
+    margin-right: var(--space-2);
+  }
+}

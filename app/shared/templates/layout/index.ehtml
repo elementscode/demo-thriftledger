@@ -1,0 +1,50 @@
+import "./style.css";
+import { session, redirect } from "@elements/app";
+import { signout } from "#app/shared/services/auth";
+
+const NAV = [
+  { id: "/", href: "/", label: "Budget" },
+  { id: "/transactions", href: "/transactions", label: "Transactions" },
+  { id: "/import", href: "/import", label: "Import" },
+  { id: "/reports", href: "/reports", label: "Reports" },
+  { id: "/accounts", href: "/accounts", label: "Accounts" },
+  { id: "/rules", href: "/rules", label: "Rules" },
+];
+
+function onSignout() {
+  signout();
+  redirect("/signin");
+}
+
+<Layout (active: string, wide: boolean = false)>
+  <div class="app">
+    <header class="layout-header">
+      <div class={["layout-bar", "page-shell", "row", wide && "is-wide"]}>
+        <a href="/" class="layout-brand row">
+          <span class="layout-mark" aria-hidden="true">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="none">
+              <path d="M3 12.5 L6.5 8 L9.5 10.5 L13 4" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+          </span>
+          thriftledger
+        </a>
+
+        <nav class="layout-nav row" aria-label="main">
+          <a e:for={item of NAV}
+             href={item.href}
+             class={[active === item.href && "is-active"]}
+             aria-current={active === item.href ? "page" : undefined}>{item.label}</a>
+        </nav>
+
+        <div class="layout-user row">
+          <span class="layout-user-name">{session.get("userName")}</span>
+          <button class="is-ghost is-sm" type="button" onclick={() => onSignout()}>Sign out</button>
+        </div>
+      </div>
+    </header>
+
+    <main class={["layout-main", "page-shell", wide && "is-wide"]}>
+      <slot/>
+    </main>
+  </div>
+</Layout>

@@ -1,0 +1,113 @@
+@import "#app/shared/styles/page.css";
+
+.signin-main {
+  min-height: 100vh;
+  display: grid;
+  grid-template-columns: 1.1fr 1fr;
+}
+
+.signin-aside {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  padding: var(--space-12);
+  background: var(--accent-soft);
+  border-right: 1px solid var(--accent-edge);
+}
+
+.signin-brand {
+  gap: var(--space-2);
+  font-weight: var(--weight-semibold);
+}
+
+.signin-mark {
+  display: inline-flex;
+  width: var(--space-8);
+  height: var(--space-8);
+  border-radius: var(--radius-md);
+  background: var(--accent);
+  color: var(--accent-ink);
+  align-items: center;
+  justify-content: center;
+}
+
+.signin-pitch h1 {
+  font-size: clamp(var(--text-3xl), 4vw, var(--text-5xl));
+  line-height: var(--leading-tight);
+  letter-spacing: -0.03em;
+  max-width: 14ch;
+}
+
+.signin-pitch .lede {
+  max-width: 34ch;
+}
+
+.signin-points {
+  font-size: var(--text-sm);
+  color: var(--ink-soft);
+}
+
+.signin-points li {
+  gap: var(--space-2);
+}
+
+.signin-points svg {
+  flex: none;
+  color: var(--accent);
+}
+
+.signin-panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-12) var(--space-6);
+}
+
+.signin-form {
+  width: 100%;
+  max-width: 24rem;
+}
+
+.signin-demo {
+  font-size: var(--text-sm);
+}
+
+.signin-demo dl {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: var(--space-1) var(--space-3);
+  margin: var(--space-2) 0 var(--space-3);
+}
+
+.signin-demo dt {
+  color: inherit;
+  opacity: 0.8;
+}
+
+.signin-demo dd {
+  margin: 0;
+  color: inherit;
+  font-family: var(--font-mono);
+}
+
+@media (max-width: 48rem) {
+  .signin-main {
+    grid-template-columns: 1fr;
+  }
+
+  .signin-aside {
+    padding: var(--space-6);
+    border-right: none;
+    border-bottom: 1px solid var(--accent-edge);
+    gap: var(--space-6);
+  }
+
+  .signin-points {
+    display: none;
+  }
+
+  .signin-panel {
+    align-items: flex-start;
+    padding: var(--space-8) var(--space-5);
+  }
+}

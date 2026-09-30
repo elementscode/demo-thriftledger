@@ -1,0 +1,411 @@
+import "./style.css";
+import { LiveView } from "@elements/app";
+import { Layout } from "#app/shared/templates/layout";
+import favicon from "#app/shared/assets/favicons/favicon.svg";
+import {
+  Account,
+  Category,
+  CategoryKind,
+  Rule,
+  Transaction,
+  byCategoryId,
+  centsToInput,
+  dayLabel,
+  formatMoney,
+  isCategorized,
+  monthLabel,
+  monthOf,
+  parseMoneyInput,
+  suggestPattern,
+} from "#app/shared/lib/ledger";
+import { seriesColor } from "#app/shared/lib/colors";
+
+export interface Filters {
+  search: string;
+  accountId: string;
+  month: string;
+  uncategorized: boolean;
+  limit: number;
+}
+
+interface SplitPart {
+  id: string;
+  categoryId: string;
+  amount: string;
+}
+
+interface SplitEdit {
+  transactionId: string;
+  parts: SplitPart[];
+  error: string;
+}
+
+/** Offered after a categorize: file every transaction like this one the same way. */
+interface Suggestion {
+  transactionId: string;
+  pattern: string;
+  categoryId: string;
+  error: string;
+}
+
+const GROUPS: { kind: CategoryKind; label: string }[] = [
+  { kind: "expense", label: "Spending" },
+  { kind: "income", label: "Income" },
+  { kind: "transfer", label: "Transfers" },
+];
+
+function matches(t: Transaction, filters: Filters): boolean {
+  if (filters.accountId && t.accountId !== filters.accountId) {
+    return false;
+  }
+
+  if (filters.month && monthOf(t.postedOn) !== filters.month) {
+    return false;
+  }
+
+  if (filters.uncategorized && isCategorized(t)) {
+    return false;
+  }
+
+  let q = filters.search.trim().toLowerCase();
+
+  return q === "" || t.description.toLowerCase().includes(q);
+}
+
+function newestFirst(a: Transaction, b: Transaction): number {
+  return b.postedOn.localeCompare(a.postedOn) || b.id.localeCompare(a.id);
+}
+
+export function visible(transactions: LiveView<Transaction>, filters: Filters): Transaction[] {
+  return transactions.filter((t) => matches(t, filters)).sort(newestFirst);
+}
+
+function months(transactions: LiveView<Transaction>): { id: string; label: string }[] {
+  let set = new Set(transactions.map((t) => monthOf(t.postedOn)));
+  return [...set].sort().reverse().map((m) => ({ id: m, label: monthLabel(m) }));
+}
+
+function sorted(categories: LiveView<Category>, kind: CategoryKind): Category[] {
+  return categories.filter((c) => c.kind === kind).sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function accountName(accounts: LiveView<Account>, id: string): string {
+  return accounts.get(id)?.name ?? "";
+}
+
+function syncUrl(filters: Filters) {
+  let params = new URLSearchParams();
+
+  if (filters.search) params.set("q", filters.search);
+  if (filters.accountId) params.set("account", filters.accountId);
+  if (filters.month) params.set("month", filters.month);
+  if (filters.uncategorized) params.set("show", "uncategorized");
+
+  let query = params.toString();
+  history.replaceState(null, "", query ? `/transactions?${query}` : "/transactions");
+}
+
+function onFilter(filters: Filters) {
+  filters.limit = 100;
+  syncUrl(filters);
+}
+
+function onCategory(
+  transactions: LiveView<Transaction>,
+  rules: LiveView<Rule>,
+  suggestion: Suggestion,
+  t: Transaction,
+  categoryId: string,
+) {
+  let wasCategorized = isCategorized(t);
+
+  transactions.update({ ...t, categoryId: categoryId || null, splits: null });
+
+  // Only offer a rule for a first categorize and when no rule already covers it.
+  let pattern = suggestPattern(t.description);
+  let covered = rules.some((r) => t.description.toLowerCase().includes(r.pattern));
+
+  if (categoryId && !wasCategorized && !covered && pattern.length >= 2) {
+    suggestion.transactionId = t.id;
+    suggestion.pattern = pattern;
+    suggestion.categoryId = categoryId;
+    suggestion.error = "";
+  }
+}
+
+function onCreateRule(rules: LiveView<Rule>, suggestion: Suggestion) {
+  try {
+    rules.insert({ pattern: suggestion.pattern, categoryId: suggestion.categoryId, createdAt: new Date() });
+    suggestion.transactionId = "";
+  } catch (err: any) {
+    suggestion.error = err.message;
+  }
+}
+
+function onDismiss(suggestion: Suggestion) {
+  suggestion.transactionId = "";
+}
+
+function onOpenSplit(edit: SplitEdit, t: Transaction, categories: LiveView<Category>) {
+  if (edit.transactionId === t.id) {
+    edit.transactionId = "";
+    return;
+  }
+
+  let sign = t.amountCents < 0 ? -1 : 1;
+
+  edit.transactionId = t.id;
+  edit.error = "";
+
+  if (t.splits && t.splits.length > 0) {
+    edit.parts = t.splits.map((p, i) => ({ id: `p${i}`, categoryId: p.categoryId, amount: centsToInput(p.amountCents * sign) }));
+    return;
+  }
+
+  let first = t.categoryId ?? categories.find((c) => c.kind === "expense")?.id ?? "";
+
+  edit.parts = [
+    { id: "p0", categoryId: first, amount: centsToInput(Math.abs(t.amountCents)) },
+    { id: "p1", categoryId: "", amount: "" },
+  ];
+}
+
+function remaining(edit: SplitEdit, t: Transaction): number {
+  let total = Math.abs(t.amountCents);
+
+  for (let part of edit.parts) {
+    let cents = parseMoneyInput(part.amount);
+
+    if (!Number.isNaN(cents)) {
+      total -= cents;
+    }
+  }
+
+  return total;
+}
+
+function onAddPart(edit: SplitEdit, t: Transaction) {
+  let left = remaining(edit, t);
+  edit.parts.push({ id: `p${Date.now()}`, categoryId: "", amount: left > 0 ? centsToInput(left) : "" });
+}
+
+function onRemovePart(edit: SplitEdit, part: SplitPart) {
+  edit.parts = edit.parts.filter((p) => p.id !== part.id);
+}
+
+function onSaveSplit(transactions: LiveView<Transaction>, edit: SplitEdit, t: Transaction) {
+  let sign = t.amountCents < 0 ? -1 : 1;
+  let parts = edit.parts.filter((p) => p.amount.trim() !== "" || p.categoryId !== "");
+
+  if (parts.some((p) => !p.categoryId)) {
+    edit.error = "choose a category for every part";
+    return;
+  }
+
+  if (parts.some((p) => Number.isNaN(parseMoneyInput(p.amount)) || parseMoneyInput(p.amount) <= 0)) {
+    edit.error = "every part needs an amount";
+    return;
+  }
+
+  if (remaining({ ...edit, parts }, t) !== 0) {
+    edit.error = "the parts must add up to the transaction";
+    return;
+  }
+
+  if (parts.length === 1) {
+    transactions.update({ ...t, categoryId: parts[0].categoryId, splits: null });
+  } else {
+    transactions.update({
+      ...t,
+      categoryId: null,
+      splits: parts.map((p) => ({ categoryId: p.categoryId, amountCents: parseMoneyInput(p.amount) * sign })),
+    });
+  }
+
+  edit.transactionId = "";
+}
+
+function onUnsplit(transactions: LiveView<Transaction>, edit: SplitEdit, t: Transaction) {
+  transactions.update({ ...t, categoryId: t.splits?.[0]?.categoryId ?? null, splits: null });
+  edit.transactionId = "";
+}
+
+function onDelete(transactions: LiveView<Transaction>, edit: SplitEdit, t: Transaction) {
+  if (confirm(`Delete "${t.description}"? A re-import brings it back.`)) {
+    edit.transactionId = "";
+    transactions.delete(t);
+  }
+}
+
+function splitSummary(t: Transaction, byId: Map<string, Category>): string {
+  return (t.splits ?? []).map((p) => byId.get(p.categoryId)?.name ?? "Deleted category").join(" + ");
+}
+
+<html lang="en" class="page-transactions" (
+  accounts: LiveView<Account>,
+  categories: LiveView<Category>,
+  transactions: LiveView<Transaction>,
+  rules: LiveView<Rule>,
+  filters: Filters,
+  private edit: SplitEdit = { transactionId: "", parts: [], error: "" },
+  private suggestion: Suggestion = { transactionId: "", pattern: "", categoryId: "", error: "" },
+)>
+  <head>
+    <title>Transactions · thriftledger</title>
+    <meta name="description" content="Every transaction across your accounts.">
+    <link rel="icon" type="image/svg+xml" href={favicon} />
+  </head>
+  <body>
+    <Layout active="/transactions">
+      <div class="stack is-lg">
+        <div class="txn-head row">
+          <h1>Transactions</h1>
+          <a class="button" href="/import">Import CSV</a>
+        </div>
+
+        <div class="txn-filters">
+          <input class="txn-search"
+                 type="search"
+                 placeholder="Search descriptions"
+                 aria-label="Search descriptions"
+                 value={filters.search}
+                 oninput={() => onFilter(filters)} />
+
+          <select aria-label="Account" value={filters.accountId} onchange={() => onFilter(filters)}>
+            <option value="">All accounts</option>
+            <option e:for={a of accounts} value={a.id}>{a.name}</option>
+          </select>
+
+          <select aria-label="Month" value={filters.month} onchange={() => onFilter(filters)}>
+            <option value="">All months</option>
+            <option e:for={m of months(transactions)} value={m.id}>{m.label}</option>
+          </select>
+
+          <label class="row is-sm">
+            <input type="checkbox" checked={filters.uncategorized} onchange={() => onFilter(filters)} />
+            Uncategorized only
+          </label>
+        </div>
+
+        <div e:if={suggestion.transactionId} class="callout is-accent suggest" role="status">
+          <div class="callout-body">
+            <span>
+              File everything matching
+              <input class="is-sm" value={suggestion.pattern} aria-label="Rule pattern" />
+              under <strong>{categories.get(suggestion.categoryId)?.name}</strong>?
+            </span>
+            <span class="row is-sm">
+              <button type="button" class="is-primary is-sm" onclick={() => onCreateRule(rules, suggestion)}>Create rule</button>
+              <button type="button" class="is-ghost is-sm" onclick={() => onDismiss(suggestion)}>Not now</button>
+            </span>
+            <span e:if={suggestion.error} class="error">{suggestion.error}</span>
+          </div>
+        </div>
+
+        <section class="card">
+          <ul class="txn-list" e:if={visible(transactions, filters).length > 0}>
+            <li e:for={t of visible(transactions, filters).slice(0, filters.limit)}
+                class={["txn-item", edit.transactionId === t.id && "is-open"]}>
+              <div class="txn-row">
+                <span class="txn-date">{dayLabel(t.postedOn)}</span>
+
+                <div class="txn-desc">
+                  <strong title={t.description}>{t.description}</strong>
+                  <small><span class="txn-date-inline">{dayLabel(t.postedOn)} · </span>{accountName(accounts, t.accountId)}</small>
+                </div>
+
+                <div class="txn-category">
+                  <button e:if={t.splits && t.splits.length > 0}
+                          type="button"
+                          class="is-sm txn-split-label"
+                          title={splitSummary(t, byCategoryId(categories))}
+                          onclick={() => onOpenSplit(edit, t, categories)}>
+                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 2 V7 M8 7 L3 13 M8 7 L13 13" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                    Split · {t.splits!.length} categories
+                  </button>
+
+                  <select e:else
+                          class={["is-sm", !t.categoryId && "is-empty"]}
+                          aria-label={`Category for ${t.description}`}
+                          onchange={(e) => onCategory(transactions, rules, suggestion, t, (e.target as HTMLSelectElement).value)}>
+                    <option value="" selected={!t.categoryId}>Uncategorized</option>
+                    <optgroup e:for={group of GROUPS} label={group.label}>
+                      <option e:for={c of sorted(categories, group.kind)} value={c.id} selected={t.categoryId === c.id}>{c.name}</option>
+                    </optgroup>
+                  </select>
+                </div>
+
+                <span class={["txn-amount", t.amountCents > 0 && "is-in"]}>{t.amountCents > 0 ? "+" : ""}{formatMoney(t.amountCents)}</span>
+
+                <button type="button"
+                        class="txn-menu is-ghost is-sm"
+                        aria-label={`Split or delete ${t.description}`}
+                        aria-expanded={edit.transactionId === t.id}
+                        onclick={() => onOpenSplit(edit, t, categories)}>
+                  <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true"><circle cx="3.5" cy="8" r="1.4"/><circle cx="8" cy="8" r="1.4"/><circle cx="12.5" cy="8" r="1.4"/></svg>
+                </button>
+              </div>
+
+              <SplitEditor e:if={edit.transactionId === t.id} {edit} {t} {categories} {transactions} />
+            </li>
+          </ul>
+
+          <div e:if={visible(transactions, filters).length > filters.limit} class="txn-more row">
+            <button type="button" onclick={() => filters.limit += 100}>Show more</button>
+            <span class="txn-count">{filters.limit} of {visible(transactions, filters).length}</span>
+          </div>
+
+          <div e:if={visible(transactions, filters).length === 0} class="txn-empty">
+            <p e:if={filters.uncategorized}>Everything is categorized. Nice.</p>
+            <p e:else>No transactions match.</p>
+          </div>
+        </section>
+      </div>
+    </Layout>
+  </body>
+</html>
+
+<SplitEditor (
+  edit: SplitEdit,
+  t: Transaction,
+  categories: LiveView<Category>,
+  transactions: LiveView<Transaction>,
+)>
+  <div class="split-editor stack is-md">
+    <div class="stack is-xs">
+      <strong>Split {formatMoney(Math.abs(t.amountCents))} across categories</strong>
+      <span class="hint">A split counts each part toward its own budget.</span>
+    </div>
+
+    <div class="stack is-sm">
+      <div e:for={part of edit.parts} class="split-part">
+        <select class="is-sm" value={part.categoryId} aria-label="Category">
+          <option value="">Choose a category</option>
+          <optgroup e:for={group of GROUPS} label={group.label}>
+            <option e:for={c of sorted(categories, group.kind)} value={c.id}>{c.name}</option>
+          </optgroup>
+        </select>
+        <input class="is-sm" inputmode="decimal" placeholder="0.00" value={part.amount} aria-label="Amount" />
+        <button type="button" class="is-ghost is-sm" aria-label="Remove part" disabled={edit.parts.length <= 1} onclick={() => onRemovePart(edit, part)}>
+          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4 L12 12 M12 4 L4 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="split-foot row">
+      <button type="button" class="is-sm" onclick={() => onAddPart(edit, t)}>Add a part</button>
+      <span class={["split-remaining", remaining(edit, t) !== 0 && "is-off"]}>
+        {remaining(edit, t) === 0 ? "Adds up" : remaining(edit, t) > 0 ? `${formatMoney(remaining(edit, t))} left to assign` : `${formatMoney(-remaining(edit, t))} too much`}
+      </span>
+    </div>
+
+    <p e:if={edit.error} class="error">{edit.error}</p>
+
+    <div class="cluster is-sm">
+      <button type="button" class="is-primary is-sm" onclick={() => onSaveSplit(transactions, edit, t)}>Save split</button>
+      <button e:if={t.splits && t.splits.length > 0} type="button" class="is-sm" onclick={() => onUnsplit(transactions, edit, t)}>Unsplit</button>
+      <button type="button" class="is-ghost is-sm" onclick={() => edit.transactionId = ""}>Cancel</button>
+      <button type="button" class="is-ghost is-sm txn-delete" onclick={() => onDelete(transactions, edit, t)}>Delete transaction</button>
+    </div>
+  </div>
+</SplitEditor>
