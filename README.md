@@ -41,7 +41,7 @@ The project server runs alongside the agent and answers as soon as a file is sav
 
 ### What shipped
 
-The app type-checks with zero errors and all 28 tests pass. During the build the agent imported in one tab and watched the budget update in another. Every page was checked on desktop and phone before publishing.
+The app type-checks with zero errors and all 28 tests pass. Every page works on desktop and phone, and live updates arrive across tabs, such as a budget that moves when an import lands.
 
 Start in `app/shared/services/ledger.ts`.
 
