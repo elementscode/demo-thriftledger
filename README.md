@@ -35,9 +35,13 @@ Thriftledger needed a ledger that stays current in every open tab, a CSV importe
 - **Reports from the data.** `/reports` draws its spending charts as SVG from the ledger's own rows, with tick and label helpers in `app/pages/reports/charts.ts`.
 - **Data from SQL files.** Two migrations define the ledger and seed one household with three accounts, categories, rules, budgets and six months of activity ending today.
 
-### What the agent got from the tooling
+### What the project server gave the agent
 
-The agent ran 20 builds in 24 minutes. It checked its work after each edit and kept going. Along the way the build caught seven errors in the reports template, among them arrays passed where a string belonged and a tag that named no template, each pointed at its file and line. The agent read the manual for each part as it reached it, 39 pages from `recipes/live-dashboard` and `livetable/partitions` to `recipes/file-upload`, then wrote 28 tests. In a real browser it imported in one tab and watched the budget update in another, and checked every page at phone width and the reports in dark mode.
+The project server runs alongside the agent and answers as soon as a file is saved: it type-checks the templates, TypeScript and SQL, applies migrations and reruns the tests, so every question came back right away and the agent kept building.
+
+### What shipped
+
+The app type-checks with zero errors and all 28 tests pass. During the build the agent imported in one tab and watched the budget update in another. Every page was checked on desktop and phone before publishing, and the repo was installed fresh from GitHub and run before the demo went live.
 
 Start in `app/shared/services/ledger.ts`.
 
