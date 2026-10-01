@@ -37,7 +37,7 @@ Thriftledger needed a ledger that stays current in every open tab, a CSV importe
 
 ### What the agent got from the tooling
 
-The agent ran 20 builds in 24 minutes. By the build's own timer, the median build finished in under a millisecond, so it checked its work after each edit and kept going. Along the way the build caught seven errors in the reports template, among them arrays passed where a string belonged and a tag that named no template, each pointed at its file and line. The agent read the manual for each part as it reached it, 39 pages from `recipes/live-dashboard` and `livetable/partitions` to `recipes/file-upload`, then wrote 28 tests. In a real browser it imported in one tab and watched the budget update in another, and checked every page at phone width and the reports in dark mode.
+The agent ran 20 builds in 24 minutes. It checked its work after each edit and kept going. Along the way the build caught seven errors in the reports template, among them arrays passed where a string belonged and a tag that named no template, each pointed at its file and line. The agent read the manual for each part as it reached it, 39 pages from `recipes/live-dashboard` and `livetable/partitions` to `recipes/file-upload`, then wrote 28 tests. In a real browser it imported in one tab and watched the budget update in another, and checked every page at phone width and the reports in dark mode.
 
 Start in `app/shared/services/ledger.ts`.
 
