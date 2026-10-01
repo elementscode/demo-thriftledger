@@ -23,6 +23,24 @@ app.
 elements create thriftledger -scaffold=elementscode/demo-thriftledger
 ```
 
+## How it's built
+
+Thriftledger needed a ledger that stays current in every open tab, a CSV importer that knows what it has already seen, rules that sort spending, and budgets that move as transactions arrive. Each of those is a part of Elements, so the agent spent its 24 minutes on the money itself.
+
+### What Elements gave the app
+
+- **A live ledger.** Accounts, categories, rules, budgets, imports and transactions are six LiveTables in `app/shared/services/ledger.ts`, each opened partitioned by the signed-in user. A `transactionsNotify` trigger carries every write to the open pages, so the dashboard's budgets move the moment an import lands in another tab.
+- **Import as a function call.** The import page reads the chosen file with `File.read` and previews it in the browser, then calls `importCsv`, an `@rpc` that parses the rows on the server and inserts them in one transaction. Each row has a fingerprint with `on conflict do nothing`, so a re-import skips what is already there, and the column mapping is saved to the account for that bank's next export.
+- **Rules that categorize.** Every imported row takes the longest matching rule, and `applyRules` runs the rules over everything still uncategorized in a single SQL update. Transaction edits go through the `transactions` LiveTable, which checks that a split's parts add up to the whole.
+- **Reports from the data.** `/reports` draws its spending charts as SVG from the ledger's own rows, with tick and label helpers in `app/pages/reports/charts.ts`.
+- **Data from SQL files.** Two migrations define the ledger and seed one household with three accounts, categories, rules, budgets and six months of activity ending today.
+
+### What the agent got from the tooling
+
+The agent ran 20 builds in 24 minutes. By the build's own timer, the median build finished in under a millisecond, so it checked its work after each edit and kept going. Along the way the build caught seven errors in the reports template, among them arrays passed where a string belonged and a tag that named no template, each pointed at its file and line. The agent read the manual for each part as it reached it, 39 pages from `recipes/live-dashboard` and `livetable/partitions` to `recipes/file-upload`, then wrote 28 tests. In a real browser it imported in one tab and watched the budget update in another, and checked every page at phone width and the reports in dark mode.
+
+Start in `app/shared/services/ledger.ts`.
+
 ## Seed data and demo account
 
 The development seed creates one user with three accounts (Everyday Checking,
