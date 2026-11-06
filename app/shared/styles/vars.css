@@ -14,7 +14,7 @@
     --accent: var(--brand-600);
     --accent-deep: var(--brand-700);
     --accent-soft: var(--brand-50);
-    --accent-ink: #ffffff;
+    --accent-ink: var(--white);
     --accent-edge: var(--brand-200);
     --link-c: 0.123;
     --link-h: 165;
@@ -39,50 +39,19 @@
   }
 }
 
-/* Chart series colors, validated for color-vision deficiency in this order.
-   A category keeps its slot, so its color never changes with its rank. */
+/* Chart series colors, from the theme's chart palette, which carries its own
+   dark values. A category keeps its slot, so its color never changes with
+   its rank. */
 @layer tokens {
   :root {
-    --series-1: #2a78d6;
-    --series-2: #eb6834;
-    --series-3: #1baf7a;
-    --series-4: #eda100;
-    --series-5: #e87ba4;
-    --series-6: #008300;
-    --series-7: #4a3aa7;
-    --series-8: #e34948;
-    --series-other: #a3a29c;
-    --chart-grid: #e1e0d9;
-    --chart-axis: #c3c2b7;
-  }
-
-  @media (prefers-color-scheme: dark) {
-    :root:not([data-theme="light"]) {
-      --series-1: #3987e5;
-      --series-2: #d95926;
-      --series-3: #199e70;
-      --series-4: #c98500;
-      --series-5: #d55181;
-      --series-6: #008300;
-      --series-7: #9085e9;
-      --series-8: #e66767;
-      --series-other: #6b6a65;
-      --chart-grid: #2c2c2a;
-      --chart-axis: #383835;
-    }
-  }
-
-  :root[data-theme="dark"] {
-    --series-1: #3987e5;
-    --series-2: #d95926;
-    --series-3: #199e70;
-    --series-4: #c98500;
-    --series-5: #d55181;
-    --series-6: #008300;
-    --series-7: #9085e9;
-    --series-8: #e66767;
-    --series-other: #6b6a65;
-    --chart-grid: #2c2c2a;
-    --chart-axis: #383835;
+    --series-1: var(--chart-1);
+    --series-2: var(--chart-2);
+    --series-3: var(--chart-3);
+    --series-4: var(--chart-4);
+    --series-5: var(--chart-5);
+    --series-6: var(--chart-6);
+    --series-7: var(--chart-7);
+    --series-8: var(--chart-8);
+    --series-other: var(--ink-dim);
   }
 }
