@@ -164,17 +164,15 @@
   .budget-spent { grid-area: spent; }
   .budget-left { grid-area: left; }
 
-  .month-nav .month-label {
-    min-width: 8rem;
-  }
-}
-
-@media (max-width: 48rem) {
   .tile {
     padding: var(--space-4);
   }
 
   .tile-value {
     font-size: var(--text-2xl);
+  }
+
+  .month-nav .month-label {
+    min-width: 8rem;
   }
 }

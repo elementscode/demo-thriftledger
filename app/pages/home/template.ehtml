@@ -23,8 +23,9 @@ import {
 import { seriesColor } from "#app/shared/lib/colors";
 import { Alert } from "@elements/ui/alert";
 import { Button } from "@elements/ui/button";
-import { Card, CardAction } from "@elements/ui/card";
+import { Card } from "@elements/ui/card";
 import { Icon } from "@elements/ui/icon";
+import { Input } from "@elements/ui/input";
 import { Progress } from "@elements/ui/progress";
 
 interface View {
@@ -218,12 +219,12 @@ function onKey(e: KeyboardEvent, edit: Edit) {
            class="alert-link"
            href="/transactions?show=uncategorized">
           <Alert variant="warning" role="none">
-            <span><strong>{uncategorizedCount(transactions, view.month)} transactions</strong> this month have no category yet, so their spending is not in a budget. Categorize them →</span>
+            <strong>{uncategorizedCount(transactions, view.month)} transactions</strong> this month have no category yet, so their spending is not in a budget. Categorize them →
           </Alert>
         </a>
 
         <Card title="Categories" level={2}>
-          <CardAction slot="action"><span class="hint">Click an amount to change the budget</span></CardAction>
+          <span slot="action" class="hint">Click an amount to change the budget</span>
 
           <ul class="budget-list">
             <li e:for={line of lines(categories, budgets, transactions, view.month)} class="budget-row">
@@ -241,13 +242,13 @@ function onKey(e: KeyboardEvent, edit: Edit) {
                 <strong>{formatMoney(line.spentCents)}</strong>
                 <span e:if={line.id !== "uncategorized"} class="budget-amount">
                   <span class="muted">{edit.categoryId === line.id || line.budget ? " of " : " · "}</span>
-                  <input e:if={edit.categoryId === line.id}
-                         class="is-sm"
-                         inputmode="decimal"
-                         aria-label={`Monthly budget for ${line.name}`}
+                  <Input e:if={edit.categoryId === line.id}
+                         size="sm"
+                         autoFocus
                          value={edit.text}
                          placeholder="0.00"
-                         oninsert={(e) => (e.target as HTMLInputElement).select()}
+                         attrs={{ inputmode: "decimal", "aria-label": `Monthly budget for ${line.name}` }}
+                         onfocus={(e) => (e.target as HTMLInputElement).select()}
                          onblur={() => onCommit(budgets, edit, line)}
                          onkeydown={(e) => onKey(e, edit)} />
                   <Button e:else
