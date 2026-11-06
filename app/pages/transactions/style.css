@@ -63,20 +63,14 @@
   color: var(--ink-soft);
 }
 
-.txn-category select {
-  width: 100%;
-}
-
-.txn-category select.is-empty {
+.txn-category .native-select.is-empty .native-select-control {
   border-color: var(--warning-edge);
   background-color: var(--warning-soft);
   color: var(--warning-ink);
 }
 
 .txn-split-label {
-  width: 100%;
   justify-content: flex-start;
-  gap: var(--space-2);
 }
 
 .txn-amount {
@@ -88,14 +82,6 @@
 
 .txn-amount.is-in {
   color: var(--success-ink);
-}
-
-.swatch {
-  flex: none;
-  width: 10px;
-  height: 10px;
-  border-radius: 3px;
-  background: var(--series-other);
 }
 
 .split-editor {
@@ -138,7 +124,7 @@
   z-index: 5;
 }
 
-.suggest .callout-body {
+.suggest-body {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -146,17 +132,11 @@
   gap: var(--space-3);
 }
 
-.suggest input {
+.suggest-body .input {
   display: inline-block;
   width: 12rem;
   margin: 0 var(--space-1);
   vertical-align: middle;
-}
-
-.txn-empty {
-  padding: var(--space-10) var(--space-5);
-  text-align: center;
-  color: var(--ink-soft);
 }
 
 .txn-more {
@@ -217,7 +197,6 @@
   }
 }
 
-.txn-filters label {
-  font-size: var(--text-sm);
+.txn-filters .label {
   white-space: nowrap;
 }

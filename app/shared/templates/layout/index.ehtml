@@ -1,6 +1,7 @@
 import "./style.css";
 import { session, redirect } from "@elements/app";
 import { signout } from "#app/shared/services/auth";
+import { Button } from "@elements/ui/button";
 
 const NAV = [
   { id: "/", href: "/", label: "Budget" },
@@ -38,7 +39,7 @@ function onSignout() {
 
         <div class="layout-user row">
           <span class="layout-user-name">{session.get("userName")}</span>
-          <button class="is-ghost is-sm" type="button" onclick={() => onSignout()}>Sign out</button>
+          <Button variant="ghost" size="sm" onclick={() => onSignout()}>Sign out</Button>
         </div>
       </div>
     </header>
