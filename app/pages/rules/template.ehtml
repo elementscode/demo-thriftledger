@@ -6,7 +6,7 @@ import { Account, Category, CategoryKind, Rule, Transaction, isCategorized } fro
 import { seriesColor } from "#app/shared/lib/colors";
 import { applyRules } from "#app/shared/services/ledger";
 import { Button } from "@elements/ui/button";
-import { Card, CardAction, CardContent, CardFooter } from "@elements/ui/card";
+import { Card, CardContent, CardFooter } from "@elements/ui/card";
 import { Field } from "@elements/ui/field";
 import { Input } from "@elements/ui/input";
 import { NativeSelect, NativeSelectOptGroup } from "@elements/ui/native-select";
@@ -166,14 +166,12 @@ function deleteMessage(count: number): string {
             </Card>
 
             <Card title={`${rules.length} rules`} level={2}>
-              <CardAction slot="action">
-                <div class="row is-sm">
-                  <span class="hint" e:if={draft.applied}>{draft.applied}</span>
-                  <Button size="sm" disabled={waitingFor(transactions, rules) === 0} onclick={() => onApply(draft)}>
-                    Apply to {waitingFor(transactions, rules)} uncategorized
-                  </Button>
-                </div>
-              </CardAction>
+              <div slot="action" class="row is-sm">
+                <span class="hint" e:if={draft.applied}>{draft.applied}</span>
+                <Button size="sm" disabled={waitingFor(transactions, rules) === 0} onclick={() => onApply(draft)}>
+                  Apply to {waitingFor(transactions, rules)} uncategorized
+                </Button>
+              </div>
 
               <div class="rule-search">
                 <Input type="search" size="sm" value={draft.search} placeholder="Filter rules" attrs={{ "aria-label": "Filter rules" }} />
@@ -202,9 +200,7 @@ function deleteMessage(count: number): string {
           </div>
 
           <Card title="Categories" level={2}>
-            <CardAction slot="action" e:if={uncategorized(transactions) > 0}>
-              <a class="hint" href="/transactions?show=uncategorized">{uncategorized(transactions)} uncategorized</a>
-            </CardAction>
+            <a slot="action" e:if={uncategorized(transactions) > 0} class="hint" href="/transactions?show=uncategorized">{uncategorized(transactions)} uncategorized</a>
 
             <div e:for={group of GROUPS} class="cat-group">
               <h3>{group.label}</h3>
