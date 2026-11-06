@@ -13,6 +13,14 @@ import {
   formatMoney,
   parseMoneyInput,
 } from "#app/shared/lib/ledger";
+import { Button } from "@elements/ui/button";
+import { Card, CardContent } from "@elements/ui/card";
+import { Field } from "@elements/ui/field";
+import { Input } from "@elements/ui/input";
+import { NativeSelect } from "@elements/ui/native-select";
+import { Empty } from "@elements/ui/empty";
+import { Icon } from "@elements/ui/icon";
+import { AlertDialog, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@elements/ui/alert-dialog";
 
 interface Draft {
   name: string;
@@ -104,14 +112,8 @@ function onAdd(accounts: LiveView<Account>, draft: Draft) {
   }
 }
 
-function onDelete(accounts: LiveView<Account>, account: Account, count: number) {
-  let message = count > 0
-    ? `Delete ${account.name} and its ${count} transactions? This cannot be undone.`
-    : `Delete ${account.name}?`;
-
-  if (confirm(message)) {
-    accounts.delete(account);
-  }
+function deleteMessage(account: Account, count: number): string {
+  return count > 0 ? `Its ${count} transactions are deleted with it. This cannot be undone.` : "";
 }
 
 <html lang="en" class="page-accounts" (
@@ -168,53 +170,54 @@ function onDelete(accounts: LiveView<Account>, account: Account, count: number) 
               </div>
 
               <div class="acct-actions row">
-                <a class="button is-sm" href={`/import?account=${account.id}`}>Import</a>
-                <a class="button is-sm is-ghost" href={`/transactions?account=${account.id}`}>Transactions</a>
-                <button type="button" class="is-ghost is-sm" aria-label={`Delete ${account.name}`} onclick={() => onDelete(accounts, account, activity(account, transactions).count)}>
-                  <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 4.5 H13 M6.5 4.5 V3 H9.5 V4.5 M4.5 4.5 L5 13 H11 L11.5 4.5" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                </button>
+                <Button size="sm" href={`/import?account=${account.id}`}>Import</Button>
+                <Button size="sm" variant="ghost" href={`/transactions?account=${account.id}`}>Transactions</Button>
+                <AlertDialog title={`Delete ${account.name}?`} description={deleteMessage(account, activity(account, transactions).count)}>
+                  <Button slot="trigger" variant="ghost" size="sm" icon label={`Delete ${account.name}`}>
+                    <Icon name="trash" />
+                  </Button>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction variant="danger" onclick={() => accounts.delete(account)}>Delete</AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialog>
               </div>
             </li>
           </ul>
 
-          <p e:else class="card-body hint">No accounts yet. Add one below.</p>
+          <Empty e:else description="No accounts yet. Add one below." />
         </section>
 
-        <section class="card">
-          <div class="card-head"><h2>Add an account</h2></div>
-          <form class="card-body stack is-md" onsubmit={() => onAdd(accounts, draft)}>
-            <div class="acct-form">
-              <div class="field">
-                <label for="acct-name">Name</label>
-                <input id="acct-name" value={draft.name} placeholder="Joint Checking" required />
+        <Card title="Add an account" level={2}>
+          <CardContent>
+            <form class="stack is-md" onsubmit={() => onAdd(accounts, draft)}>
+              <div class="acct-form">
+                <Field label="Name" reserveError={false}>
+                  <Input value={draft.name} placeholder="Joint Checking" required />
+                </Field>
+
+                <Field label="Type" reserveError={false}>
+                  <NativeSelect block value={draft.kind} options={ACCOUNT_KINDS.map((k) => ({ value: k.kind, label: k.label }))} />
+                </Field>
+
+                <Field label="Bank" reserveError={false}>
+                  <Input value={draft.institution} placeholder="Harborline Credit Union" />
+                </Field>
+
+                <Field label={draft.kind === "credit" ? "Balance owed" : "Starting balance"} reserveError={false}>
+                  <Input value={draft.opening} placeholder="0.00" attrs={{ inputmode: "decimal" }} />
+                </Field>
               </div>
 
-              <div class="field">
-                <label for="acct-kind">Type</label>
-                <select id="acct-kind" value={draft.kind}>
-                  <option e:for={k of ACCOUNT_KINDS.map((k) => ({ ...k, id: k.kind }))} value={k.kind}>{k.label}</option>
-                </select>
+              <p e:if={draft.error} class="error">{draft.error}</p>
+
+              <div class="acct-form-foot row">
+                <span class="hint">Then import its transactions from a CSV export.</span>
+                <Button type="submit" variant="primary">Add account</Button>
               </div>
-
-              <div class="field">
-                <label for="acct-bank">Bank</label>
-                <input id="acct-bank" value={draft.institution} placeholder="Harborline Credit Union" />
-              </div>
-
-              <div class="field">
-                <label for="acct-open">{draft.kind === "credit" ? "Balance owed" : "Starting balance"}</label>
-                <input id="acct-open" inputmode="decimal" value={draft.opening} placeholder="0.00" />
-              </div>
-            </div>
-
-            <p e:if={draft.error} class="error">{draft.error}</p>
-
-            <div class="acct-form-foot row">
-              <span class="hint">Then import its transactions from a CSV export.</span>
-              <button type="submit" class="is-primary">Add account</button>
-            </div>
-          </form>
-        </section>
+            </form>
+          </CardContent>
+        </Card>
       </div>
     </Layout>
   </body>
