@@ -17,6 +17,10 @@
   align-items: center;
 }
 
+.txn-filters .label {
+  white-space: nowrap;
+}
+
 .txn-list {
   list-style: none;
   margin: 0;
@@ -45,6 +49,10 @@
   color: var(--ink-soft);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
+}
+
+.txn-date-inline {
+  display: none;
 }
 
 .txn-desc {
@@ -169,6 +177,7 @@
   }
 
   .txn-date { display: none; }
+  .txn-date-inline { display: inline; }
   .txn-desc { grid-area: desc; }
   .txn-amount { grid-area: amount; }
   .txn-category { grid-area: category; }
@@ -185,18 +194,4 @@
   .suggest {
     top: 7rem;
   }
-}
-
-.txn-date-inline {
-  display: none;
-}
-
-@media (max-width: 48rem) {
-  .txn-date-inline {
-    display: inline;
-  }
-}
-
-.txn-filters .label {
-  white-space: nowrap;
 }
