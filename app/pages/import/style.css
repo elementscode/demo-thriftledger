@@ -7,6 +7,10 @@
   align-items: start;
 }
 
+.import-grid > * {
+  min-width: 0;
+}
+
 .step-title {
   gap: var(--space-3);
 }
@@ -27,6 +31,8 @@
 
 .step-title h2 {
   margin: 0;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-semibold);
 }
 
 .import-drop {
@@ -41,11 +47,6 @@
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: var(--space-4);
-}
-
-.preview td,
-.preview th {
-  white-space: nowrap;
 }
 
 .preview tr.is-dupe td {
@@ -99,13 +100,3 @@
     grid-template-columns: 1fr;
   }
 }
-
-.step-title h2 {
-  font-size: var(--text-lg);
-  font-weight: var(--weight-semibold);
-}
-
-.import-grid > * {
-  min-width: 0;
-}
-

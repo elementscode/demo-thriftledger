@@ -245,7 +245,7 @@ function newestImports(imports: LiveView<ImportRecord>): ImportRecord[] {
                 </FileUpload>
 
                 <div e:else class="row is-sm">
-                  <Badge variant="outline">{state.fileName}</Badge>
+                  <Badge variant="neutral">{state.fileName}</Badge>
                   <span class="hint">{state.table!.rows.length} rows</span>
                   <Button variant="ghost" size="sm" onclick={() => onReset(state)}>Choose another file</Button>
                 </div>
@@ -292,7 +292,7 @@ function newestImports(imports: LiveView<ImportRecord>): ImportRecord[] {
 
                 <div class="counts cluster">
                   <Badge variant="accent">{preview(state, transactions).fresh} new</Badge>
-                  <Badge variant="outline">{preview(state, transactions).duplicates} already imported</Badge>
+                  <Badge variant="neutral">{preview(state, transactions).duplicates} already imported</Badge>
                   <Badge e:if={preview(state, transactions).errors.length > 0} variant="warning">{preview(state, transactions).errors.length} unreadable</Badge>
                 </div>
 
