@@ -21,6 +21,11 @@ import {
   spendingByCategory,
 } from "#app/shared/lib/ledger";
 import { seriesColor } from "#app/shared/lib/colors";
+import { Alert } from "@elements/ui/alert";
+import { Button } from "@elements/ui/button";
+import { Card, CardAction } from "@elements/ui/card";
+import { Icon } from "@elements/ui/icon";
+import { Progress } from "@elements/ui/progress";
 
 interface View {
   month: string;
@@ -197,31 +202,28 @@ function onKey(e: KeyboardEvent, edit: Edit) {
           <h1>Budget</h1>
 
           <div class="month-nav row">
-            <button type="button" class="is-sm" aria-label="Previous month" onclick={() => onMonth(view, -1)}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M10 3 L5 8 L10 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
+            <Button size="sm" icon label="Previous month" onclick={() => onMonth(view, -1)}>
+              <Icon name="chevron-left" />
+            </Button>
             <span class="month-label">{monthLabel(view.month)}</span>
-            <button type="button" class="is-sm" aria-label="Next month" onclick={() => onMonth(view, 1)}>
-              <svg width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M6 3 L11 8 L6 13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>
-            </button>
+            <Button size="sm" icon label="Next month" onclick={() => onMonth(view, 1)}>
+              <Icon name="chevron-right" />
+            </Button>
           </div>
         </div>
 
         <BudgetTiles all={lines(categories, budgets, transactions, view.month)} month={view.month} />
 
         <a e:if={uncategorizedCount(transactions, view.month) > 0}
-           class="callout is-warning"
+           class="alert-link"
            href="/transactions?show=uncategorized">
-          <div class="callout-body">
-            <strong>{uncategorizedCount(transactions, view.month)} transactions</strong> this month have no category yet, so their spending is not in a budget. Categorize them →
-          </div>
+          <Alert variant="warning" role="none">
+            <span><strong>{uncategorizedCount(transactions, view.month)} transactions</strong> this month have no category yet, so their spending is not in a budget. Categorize them →</span>
+          </Alert>
         </a>
 
-        <section class="card">
-          <div class="card-head section-title row">
-            <h2>Categories</h2>
-            <span class="hint">Click an amount to change the budget</span>
-          </div>
+        <Card title="Categories" level={2}>
+          <CardAction slot="action"><span class="hint">Click an amount to change the budget</span></CardAction>
 
           <ul class="budget-list">
             <li e:for={line of lines(categories, budgets, transactions, view.month)} class="budget-row">
@@ -230,11 +232,10 @@ function onKey(e: KeyboardEvent, edit: Edit) {
                 <span>{line.name}</span>
               </div>
 
-              <div class={["bar", !line.budget && "is-empty"]}
-                   role="img"
-                   aria-label={line.budget ? `${Math.round(share(line))}% of budget spent` : "no budget"}>
-                <div class={["bar-fill", level(line)]} style={`width: ${share(line)}%`}></div>
-              </div>
+              <Progress size="lg"
+                        class={["bar", level(line)].join(" ")}
+                        value={line.budget ? share(line) : 0}
+                        attrs={{ "aria-label": line.budget ? `${line.name} budget spent` : `${line.name}: no budget` }} />
 
               <div class="budget-spent">
                 <strong>{formatMoney(line.spentCents)}</strong>
@@ -249,10 +250,10 @@ function onKey(e: KeyboardEvent, edit: Edit) {
                          oninsert={(e) => (e.target as HTMLInputElement).select()}
                          onblur={() => onCommit(budgets, edit, line)}
                          onkeydown={(e) => onKey(e, edit)} />
-                  <button e:else
-                          type="button"
-                          class="is-bare budget-edit"
-                          onclick={() => onEdit(edit, line)}>{line.budget ? formatWholeMoney(line.budget.amountCents) : "set budget"}</button>
+                  <Button e:else
+                          variant="link"
+                          class="budget-edit"
+                          onclick={() => onEdit(edit, line)}>{line.budget ? formatWholeMoney(line.budget.amountCents) : "set budget"}</Button>
                 </span>
               </div>
 
@@ -263,7 +264,7 @@ function onKey(e: KeyboardEvent, edit: Edit) {
               </div>
             </li>
           </ul>
-        </section>
+        </Card>
       </div>
     </Layout>
   </body>

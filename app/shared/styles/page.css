@@ -2,11 +2,12 @@
 @import "@elements/ui/themes/dashboard";
 @import "./vars.css";
 
-a.callout {
+a.alert-link {
   display: block;
+  color: inherit;
   text-decoration: none;
 }
 
-a.callout:hover {
+a.alert-link:hover {
   text-decoration: underline;
 }
