@@ -5,6 +5,13 @@ import favicon from "#app/shared/assets/favicons/favicon.svg";
 import { Account, Category, CategoryKind, Rule, Transaction, isCategorized } from "#app/shared/lib/ledger";
 import { seriesColor } from "#app/shared/lib/colors";
 import { applyRules } from "#app/shared/services/ledger";
+import { Button } from "@elements/ui/button";
+import { Card, CardAction, CardContent, CardFooter } from "@elements/ui/card";
+import { Field } from "@elements/ui/field";
+import { Input } from "@elements/ui/input";
+import { NativeSelect, NativeSelectOptGroup } from "@elements/ui/native-select";
+import { Icon } from "@elements/ui/icon";
+import { AlertDialog, AlertDialogFooter, AlertDialogCancel, AlertDialogAction } from "@elements/ui/alert-dialog";
 
 interface RuleDraft {
   pattern: string;
@@ -109,14 +116,8 @@ function onAddCategory(categories: LiveView<Category>, draft: CategoryDraft) {
   }
 }
 
-function onDeleteCategory(categories: LiveView<Category>, category: Category, count: number) {
-  let message = count > 0
-    ? `Delete ${category.name}? Its ${count} transactions become uncategorized, and its rules and budget go too.`
-    : `Delete ${category.name}?`;
-
-  if (confirm(message)) {
-    categories.delete(category);
-  }
+function deleteMessage(count: number): string {
+  return count > 0 ? `Its ${count} transactions become uncategorized, and its rules and budget go too.` : "";
 }
 
 <html lang="en" class="page-rules" (
@@ -142,70 +143,68 @@ function onDeleteCategory(categories: LiveView<Category>, category: Category, co
 
         <div class="rules-grid">
           <div class="stack is-lg">
-            <section class="card">
-              <div class="card-head"><h2>New rule</h2></div>
-              <form class="card-body stack is-sm" onsubmit={() => onAddRule(rules, draft)}>
-                <div class="rule-add">
-                  <div class="field">
-                    <label for="rule-pattern">Description contains</label>
-                    <input id="rule-pattern" value={draft.pattern} placeholder="fernleaf market" autocapitalize="none" spellcheck={false} />
+            <Card title="New rule" level={2}>
+              <CardContent>
+                <form class="stack is-sm" onsubmit={() => onAddRule(rules, draft)}>
+                  <div class="rule-add">
+                    <Field label="Description contains" reserveError={false}>
+                      <Input value={draft.pattern} placeholder="fernleaf market" attrs={{ autocapitalize: "none", spellcheck: "false" }} />
+                    </Field>
+                    <Field label="File it under" reserveError={false}>
+                      <NativeSelect block value={draft.categoryId} placeholder="Choose…">
+                        <NativeSelectOptGroup e:for={group of GROUPS} label={group.label}>
+                          <option e:for={c of sorted(categories, group.id)} value={c.id}>{c.name}</option>
+                        </NativeSelectOptGroup>
+                      </NativeSelect>
+                    </Field>
+                    <Button type="submit" variant="primary">Add rule</Button>
                   </div>
-                  <div class="field">
-                    <label for="rule-category">File it under</label>
-                    <select id="rule-category" value={draft.categoryId}>
-                      <option value="">Choose…</option>
-                      <optgroup e:for={group of GROUPS} label={group.label}>
-                        <option e:for={c of sorted(categories, group.id)} value={c.id}>{c.name}</option>
-                      </optgroup>
-                    </select>
-                  </div>
-                  <button type="submit" class="is-primary">Add rule</button>
-                </div>
-                <p e:if={draft.error} class="error">{draft.error}</p>
-                <p e:else class="hint">New rules also categorize the matching transactions already waiting.</p>
-              </form>
-            </section>
+                  <p e:if={draft.error} class="error">{draft.error}</p>
+                  <p e:else class="hint">New rules also categorize the matching transactions already waiting.</p>
+                </form>
+              </CardContent>
+            </Card>
 
-            <section class="card">
-              <div class="card-head split">
-                <h2>{rules.length} rules</h2>
+            <Card title={`${rules.length} rules`} level={2}>
+              <CardAction slot="action">
                 <div class="row is-sm">
                   <span class="hint" e:if={draft.applied}>{draft.applied}</span>
-                  <button type="button" class="is-sm" disabled={waitingFor(transactions, rules) === 0} onclick={() => onApply(draft)}>
+                  <Button size="sm" disabled={waitingFor(transactions, rules) === 0} onclick={() => onApply(draft)}>
                     Apply to {waitingFor(transactions, rules)} uncategorized
-                  </button>
+                  </Button>
                 </div>
-              </div>
+              </CardAction>
 
               <div class="rule-search">
-                <input type="search" class="is-sm" value={draft.search} placeholder="Filter rules" aria-label="Filter rules" />
+                <Input type="search" size="sm" value={draft.search} placeholder="Filter rules" attrs={{ "aria-label": "Filter rules" }} />
               </div>
 
               <ul class="rule-list">
                 <li e:for={rule of visibleRules(rules, categories, draft.search)} class="rule-row">
                   <span class="rule-pattern" title={rule.pattern}>{rule.pattern}</span>
                   <svg class="rule-arrow" width="16" height="16" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M3 8 H12 M9 5 L12 8 L9 11" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg>
-                  <select class="is-sm"
-                          aria-label={`Category for ${rule.pattern}`}
-                          onchange={(e) => onRuleCategory(rules, rule, (e.target as HTMLSelectElement).value)}>
-                    <optgroup e:for={group of GROUPS} label={group.label}>
-                      <option e:for={c of sorted(categories, group.id)} value={c.id} selected={rule.categoryId === c.id}>{c.name}</option>
-                    </optgroup>
-                  </select>
+                  <NativeSelect size="sm"
+                                block
+                                value={rule.categoryId}
+                                attrs={{ "aria-label": `Category for ${rule.pattern}` }}
+                                onchange={(e) => onRuleCategory(rules, rule, (e.target as HTMLSelectElement).value)}>
+                    <NativeSelectOptGroup e:for={group of GROUPS} label={group.label}>
+                      <option e:for={c of sorted(categories, group.id)} value={c.id}>{c.name}</option>
+                    </NativeSelectOptGroup>
+                  </NativeSelect>
                   <span class="rule-count">{matchCount(transactions, rule)} {matchCount(transactions, rule) === 1 ? "match" : "matches"}</span>
-                  <button type="button" class="is-ghost is-sm" aria-label={`Delete rule ${rule.pattern}`} onclick={() => rules.delete(rule)}>
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4 L12 12 M12 4 L4 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                  </button>
+                  <Button variant="ghost" size="sm" icon label={`Delete rule ${rule.pattern}`} onclick={() => rules.delete(rule)}>
+                    <Icon name="x" />
+                  </Button>
                 </li>
               </ul>
-            </section>
+            </Card>
           </div>
 
-          <section class="card">
-            <div class="card-head split">
-              <h2>Categories</h2>
-              <a class="hint" href="/transactions?show=uncategorized" e:if={uncategorized(transactions) > 0}>{uncategorized(transactions)} uncategorized</a>
-            </div>
+          <Card title="Categories" level={2}>
+            <CardAction slot="action" e:if={uncategorized(transactions) > 0}>
+              <a class="hint" href="/transactions?show=uncategorized">{uncategorized(transactions)} uncategorized</a>
+            </CardAction>
 
             <div e:for={group of GROUPS} class="cat-group">
               <h3>{group.label}</h3>
@@ -214,22 +213,28 @@ function onDeleteCategory(categories: LiveView<Category>, category: Category, co
                   <span class="swatch" style={`background: ${seriesColor(c)}`}></span>
                   <span>{c.name}</span>
                   <small>{usage(transactions, c)}</small>
-                  <button type="button" class="is-ghost is-sm" aria-label={`Delete ${c.name}`} onclick={() => onDeleteCategory(categories, c, usage(transactions, c))}>
-                    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M4 4 L12 12 M12 4 L4 12" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
-                  </button>
+                  <AlertDialog title={`Delete ${c.name}?`} description={deleteMessage(usage(transactions, c))}>
+                    <Button slot="trigger" variant="ghost" size="sm" icon label={`Delete ${c.name}`}>
+                      <Icon name="x" />
+                    </Button>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel>Cancel</AlertDialogCancel>
+                      <AlertDialogAction variant="danger" onclick={() => categories.delete(c)}>Delete</AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialog>
                 </li>
               </ul>
             </div>
 
-            <form class="card-foot cat-add" onsubmit={() => onAddCategory(categories, categoryDraft)}>
-              <input value={categoryDraft.name} placeholder="New category" aria-label="New category name" class="is-sm" />
-              <select value={categoryDraft.kind} aria-label="Kind" class="is-sm">
-                <option e:for={group of GROUPS} value={group.id}>{group.label}</option>
-              </select>
-              <button type="submit" class="is-sm">Add</button>
-            </form>
+            <CardFooter>
+              <form class="cat-add" onsubmit={() => onAddCategory(categories, categoryDraft)}>
+                <Input size="sm" value={categoryDraft.name} placeholder="New category" attrs={{ "aria-label": "New category name" }} />
+                <NativeSelect size="sm" block value={categoryDraft.kind} attrs={{ "aria-label": "Kind" }} options={GROUPS.map((g) => ({ value: g.id, label: g.label }))} />
+                <Button type="submit" size="sm">Add</Button>
+              </form>
+            </CardFooter>
             <p e:if={categoryDraft.error} class="error card-body">{categoryDraft.error}</p>
-          </section>
+          </Card>
         </div>
       </div>
     </Layout>
