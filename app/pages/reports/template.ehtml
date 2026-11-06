@@ -34,13 +34,13 @@ interface View {
   month: string;
 }
 
-type Slice = {
+interface Slice {
   id: string;
   name: string;
   color: string;
   cents: number;
   share: number;
-};
+}
 
 const OTHER = "other";
 
