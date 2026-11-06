@@ -127,7 +127,9 @@
   font-variant-numeric: tabular-nums;
 }
 
-.budget-amount input {
+.budget-amount .input {
+  display: inline-block;
+  vertical-align: middle;
   width: 7.5rem;
   text-align: right;
 }
