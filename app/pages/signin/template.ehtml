@@ -2,6 +2,10 @@ import "./style.css";
 import { redirect } from "@elements/app";
 import { signin, DEMO_LOGIN } from "#app/shared/services/auth";
 import favicon from "#app/shared/assets/favicons/favicon.svg";
+import { Alert, AlertDescription } from "@elements/ui/alert";
+import { Button } from "@elements/ui/button";
+import { Field } from "@elements/ui/field";
+import { Input } from "@elements/ui/input";
 
 interface SigninForm {
   email: string;
@@ -77,45 +81,38 @@ function onUseDemo(form: SigninForm) {
             <p class="hint">Welcome back.</p>
           </div>
 
-          <div class="callout is-accent signin-demo">
-            <div class="callout-title">Demo account</div>
-            <div class="callout-body">
+          <Alert variant="accent" role="none" title="Demo account" class="signin-demo">
+            <AlertDescription>
               <dl>
                 <dt>Email</dt>
                 <dd>{DEMO_LOGIN.email}</dd>
                 <dt>Password</dt>
                 <dd>{DEMO_LOGIN.password}</dd>
               </dl>
-              <button type="button" class="is-sm" disabled={form.busy} onclick={() => onUseDemo(form)}>Sign in as Maya</button>
-            </div>
-          </div>
+              <Button size="sm" disabled={form.busy} onclick={() => onUseDemo(form)}>Sign in as Maya</Button>
+            </AlertDescription>
+          </Alert>
 
           <p e:if={form.error} class="error" role="alert">{form.error}</p>
 
-          <div class="field">
-            <label for="email">Email</label>
-            <input id="email"
-                   name="email"
+          <Field label="Email" reserveError={false}>
+            <Input name="email"
                    type="email"
                    value={form.email}
-                   autocomplete="email"
-                   autocapitalize="none"
-                   spellcheck={false}
                    placeholder="you@example.com"
-                   required>
-          </div>
+                   required
+                   attrs={{ id: "email", autocomplete: "email", autocapitalize: "none", spellcheck: "false" }} />
+          </Field>
 
-          <div class="field">
-            <label for="password">Password</label>
-            <input id="password"
-                   name="password"
+          <Field label="Password" reserveError={false}>
+            <Input name="password"
                    type="password"
                    value={form.password}
-                   autocomplete="current-password"
-                   required>
-          </div>
+                   required
+                   attrs={{ id: "password", autocomplete: "current-password" }} />
+          </Field>
 
-          <button type="submit" class={["is-primary", "is-block", form.busy && "is-loading"]} disabled={form.busy}>Sign in</button>
+          <Button type="submit" variant="primary" block loading={form.busy}>Sign in</Button>
         </form>
       </div>
     </main>
