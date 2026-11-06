@@ -7,10 +7,6 @@
   align-items: start;
 }
 
-.import-steps {
-  counter-reset: step;
-}
-
 .step-title {
   gap: var(--space-3);
 }
@@ -33,28 +29,11 @@
   margin: 0;
 }
 
-.drop {
-  display: flex;
-  flex-direction: column;
+.import-drop {
   align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-8) var(--space-5);
-  border: 1.5px dashed var(--rule-strong);
-  border-radius: var(--radius-md);
-  background: var(--bg-soft);
-  text-align: center;
-  cursor: pointer;
 }
 
-.drop:hover {
-  border-color: var(--accent);
-}
-
-.drop input[type="file"] {
-  max-width: 100%;
-}
-
-.drop svg {
+.import-drop .icon {
   color: var(--ink-dim);
 }
 
@@ -64,27 +43,9 @@
   gap: var(--space-4);
 }
 
-.preview {
-  width: 100%;
-  font-size: var(--text-sm);
-  margin: 0;
-}
-
-.preview-wrap {
-  overflow-x: auto;
-  border: 1px solid var(--rule);
-  border-radius: var(--radius-md);
-}
-
 .preview td,
 .preview th {
   white-space: nowrap;
-}
-
-.preview td.num,
-.preview th.num {
-  text-align: right;
-  font-variant-numeric: tabular-nums;
 }
 
 .preview tr.is-dupe td {
@@ -148,18 +109,3 @@
   min-width: 0;
 }
 
-.drop {
-  position: relative;
-}
-
-.drop input[type="file"] {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  cursor: pointer;
-}
-
-.drop:focus-within {
-  border-color: var(--accent);
-  outline: 2px solid var(--accent-edge);
-}
